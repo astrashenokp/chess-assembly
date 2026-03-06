@@ -1,5 +1,5 @@
 # R07 – Chess (TASM / DOSBox)
-## Architecture & Integration Contract (Week 8)
+## Architecture & Integration Contract
 
 Цей документ фіксує архітектурні рішення для початку паралельної роботи
 Студента A (UI) та Студента B (Game Logic).
@@ -137,62 +137,9 @@ Student B:
     - is_checkmate
     - ai_turn
 
-UI НІКОЛИ не змінює board напряму.
-Логіка НІКОЛИ не малює.
-
 ---
 
-# 6. API Contract
-
-Параметри передаються через стек.
-Результати – через AX або глобальні буфери.
-
----------------------------------
-get_legal_moves
----------------------------------
-
-IN:
-    push from_index
-
-OUT:
-    AX = кількість ходів
-    move_list заповнений
-
----------------------------------
-execute_move
----------------------------------
-
-IN:
-    push to_index
-    push from_index
-
-OUT:
-    AX = захоплена фігура (0 якщо немає)
-
----------------------------------
-is_square_attacked
----------------------------------
-
-IN:
-    push square_index
-    push attacker_color
-
-OUT:
-    AX = 0 (ні) або 1 (так)
-
----------------------------------
-is_in_check
----------------------------------
-
-IN:
-    push color
-
-OUT:
-    AX = 0 (ні) або 1 (так)
-
----
-
-# 7. File Structure
+# 6. File Structure
 
 main.asm
 display.asm
@@ -200,28 +147,6 @@ input.asm
 game.asm
 ai.asm
 shared.inc
-
----
-
-# 8. Procedure Skeletons (Stub Implementation)
-
-## main.asm
-
-start:
-    mov ax, @data
-    mov ds, ax
-
-    call init_board
-
-game_loop:
-    call draw_board
-    call draw_status
-    call handle_input
-    jmp game_loop
-
-exit_program:
-    mov ah, 4Ch
-    int 21h
 
 ---
 
@@ -303,13 +228,4 @@ ai_turn PROC
     ret
 ai_turn ENDP
 
----
-
-# 9. Integration Criteria (End of Week 8)
-
-1. Проєкт компілюється без помилок.
-2. Всі PROC існують та лінкуються.
-3. Board може бути ініціалізований.
-4. Студенти можуть викликати процедури один одного.
-5. shared.inc підключений в усіх модулях.
 

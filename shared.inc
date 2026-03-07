@@ -1,0 +1,12 @@
+; bit mascs
+TYPE_MASK   EQU 00000111b
+COLOR_MASK  EQU 00001000b
+
+WHITE       EQU 0
+BLACK       EQU 1
+
+; const for board rendering
+CELL_WIDTH  EQU 4
+CELL_HEIGHT EQU 2
+BOARD_LEFT  EQU 24    ; (80 - 32) / 2
+BOARD_TOP   EQU 2

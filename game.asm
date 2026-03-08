@@ -1,5 +1,6 @@
 INCLUDE shared.inc
  
+.DATA
 ; Direction tables
 rook_dirs:
     DB  0,-1

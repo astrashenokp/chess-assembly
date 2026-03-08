@@ -1,4 +1,4 @@
-; bit mascs
+; bit masks
 TYPE_MASK   EQU 00000111b
 COLOR_MASK  EQU 00001000b
 

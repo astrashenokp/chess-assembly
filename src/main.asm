@@ -25,6 +25,9 @@ move_count  DB 0
     
 .CODE
 
+EXTRN init_video_mode:PROC
+EXTRN draw_board:PROC
+
 start:
     mov ax, @data
     mov ds, ax
@@ -35,8 +38,5 @@ start:
 exit_program:
     mov ah, 4Ch
     int 21h
-
-INCLUDE display.asm
-INCLUDE game.asm  
 
 END start

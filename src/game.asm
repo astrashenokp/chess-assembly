@@ -57,6 +57,15 @@ start_position DB
 ; Game Logic
 
 .CODE 
+; make procs public for main.asm
+PUBLIC init_board
+PUBLIC get_legal_moves
+PUBLIC execute_move
+PUBLIC is_in_check
+PUBLIC is_square_attacked
+PUBLIC is_checkmate
+
+
 ; init_board
 ; sets initial chess position
 init_board PROC

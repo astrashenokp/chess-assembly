@@ -1,3 +1,5 @@
+.MODEL small
+
 INCLUDE shared.inc
  
 .DATA
@@ -5,7 +7,7 @@ INCLUDE shared.inc
 ; Board representation
 ; index = row * 8 + col
  
-
+PUBLIC board
 board DB 64 DUP(?)
 
  
@@ -18,30 +20,36 @@ black_king_pos  DB ?
 ; Move buffer
 ; format: from_row, from_col, to_row, to_col
 move_list   DB 512 DUP(?)
-move_count  DB 0
+move_count  DW 0
 
 ; Direction tables
-rook_dirs:
-    DB  0,-1
-    DB  0, 1
-    DB -1, 0
-    DB  1, 0
+rook_dirs DB  0,-1
+        DB  0, 1
+        DB -1, 0
+        DB  1, 0
 
-bishop_dirs:
-    DB -1,-1
-    DB -1, 1
-    DB  1,-1
-    DB  1, 1
+bishop_dirs DB -1,-1
+        DB -1, 1
+        DB  1,-1
+        DB  1, 1
 
-knight_offsets:
-    DB -2,-1
-    DB -2, 1
-    DB -1,-2
-    DB -1, 2
-    DB  1,-2
-    DB  1, 2
-    DB  2,-1
-    DB  2, 1
+knight_offsets DB -2,-1
+        DB -2, 1
+        DB -1,-2
+        DB -1, 2
+        DB  1,-2
+        DB  1, 2
+        DB  2,-1
+        DB  2, 1
+
+king_dirs DB -1,-1
+        DB -1,0
+        DB -1,1
+        DB 0,-1
+        DB 0,1
+        DB 1,-1
+        DB 1,0
+        DB 1,1
 
 ; Pieces
 EMPTY    EQU 0
@@ -53,15 +61,14 @@ QUEEN  EQU 5
 KING   EQU 6
 BLACK_BIT EQU 08h 
 
-start_position DB
-    12,10,11,13,14,11,10,12,   ; black pieces
-    9,9,9,9,9,9,9,9,           ; black pawns
-    0,0,0,0,0,0,0,0
-    0,0,0,0,0,0,0,0
-    0,0,0,0,0,0,0,0
-    0,0,0,0,0,0,0,0
-    1,1,1,1,1,1,1,1,           ; white pawns
-    4,2,3,5,6,3,2,4            ; white pieces
+start_position DB 12,10,11,13,14,11,10,12
+               DB 9,9,9,9,9,9,9,9
+               DB 0,0,0,0,0,0,0,0
+               DB 0,0,0,0,0,0,0,0
+               DB 0,0,0,0,0,0,0,0
+               DB 0,0,0,0,0,0,0,0
+               DB 1,1,1,1,1,1,1,1
+               DB 4,2,3,5,6,3,2,4
 
 
 ; Game Logic
@@ -120,26 +127,65 @@ col EQU [bp+6]
     shl dl, 3
     add dl, bl
 
-    mov al, board[dl]
+    xor dh, dh
+    mov si, dx
+    mov al, board[si]
+
+    ; check if the square is empty
+    cmp al, EMPTY
+    je done
 
     ; save the piece color
     mov ah, al
     and ah, COLOR_MASK
     mov bh, ah          ; BH stores the color
 
+    ; if current_turn = white
+    cmp current_turn, 0
+    je check_white
+
+    ; current_turn = black
+    cmp bh, BLACK
+    jne done
+    jmp color_ok
+
+    check_white:
+    cmp bh, WHITE
+    jne done
+
+color_ok:
+
     ; check piece type  
     and al, TYPE_MASK
 
     cmp al, KNIGHT
-    je knight_moves
+    je call_knight
 
     cmp al, KING
-    je king_moves
+    je call_king
 
     jmp done
 
+call_knight:
+    push row
+    push col
+    call generate_knight_moves
+    jmp done
+
+call_king:
+    push row
+    push col
+    call generate_king_moves
+
+done:
+
+    pop bp
+    ret 4
+get_legal_moves ENDP
+
 
 ; KNIGHT
+generate_knight_moves PROC
 knight_moves:
 
     mov si, offset knight_offsets
@@ -164,10 +210,15 @@ knight_loop:
     cmp bl, 7
     jg knight_next
 
+    ; index = new_row*8 + new_col
+    mov dl, al
+    shl dl, 3
     add dl, bl
 
     ; ah =  piece on the board cell
-    mov ah, board[dl]
+    xor dh, dh
+    mov si, dx
+    mov aH, board[si]
 
     ; check if square contains same color piece
     mov al, ah
@@ -183,32 +234,33 @@ knight_loop:
 
     ; from_row
     mov al, row
-    mov [dx], al
+    mov [di], al
 
     ; from_col
     mov al, col
-    mov [dx+1], al
+    mov [di+1], al
 
     ; to_row
     mov al, row
     add al, [si]
-    mov [dx+2], al
+    mov [di+2], al
 
     ; to_col
     mov al, col
     add al, [si+1]
-    mov [dx+3], al
+    mov [di+3], al
 
     inc move_count
 
 knight_next:
     add si, 2
     loop knight_loop
-
-    jmp done
+    ret 2 
+generate_knight_moves ENDP
 
 
 ; KING
+generate_king_moves PROC
 king_moves:
 
     mov si, offset king_dirs
@@ -238,7 +290,9 @@ king_loop:
     shl dl, 3
     add dl, bl
 
-     mov ah, board[dl]
+    xor dh, dh
+    mov si, dx
+    mov ah, board[si]
 
     ; check if square contains same color piece
     mov al, ah
@@ -275,13 +329,8 @@ king_next:
 
     add si, 2
     loop king_loop
-
-
-done:
-
-    pop bp
-    ret 4
-get_legal_moves ENDP
+    ret 2
+generate_king_moves ENDP
 
 
 ; execute_move
@@ -303,6 +352,7 @@ to_col   EQU [bp+10]
     mov al, from_row
     shl al, 3
     add al, from_col
+    xor ah, ah
     mov si, ax
 
     ; piece = board[from]
@@ -312,6 +362,7 @@ to_col   EQU [bp+10]
     mov al, to_row
     shl al, 3
     add al, to_col
+    xor ah, ah
     mov di, ax
 
     ; captured piece in AH
@@ -320,8 +371,31 @@ to_col   EQU [bp+10]
     ; move piece
     mov board[di], bl
 
+    mov al, bl
+    and al, TYPE_MASK
+
+    cmp al, KING
+    jne not_king
+
+    mov al, bl
+    and al, COLOR_MASK
+
+    cmp al, WHITE
+    jne black_king_move
+
+    mov white_king_pos, dl
+    jmp not_king
+
+black_king_move:
+    mov black_king_pos, dl
+
+not_king:
+
     ; clear source square
     mov board[si], 0
+
+    ; change turn
+    xor current_turn, 1
 
     pop bp
     ret 8

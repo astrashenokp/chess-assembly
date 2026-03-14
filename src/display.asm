@@ -2,6 +2,8 @@
 INCLUDE shared.inc
 
 .DATA
+    EXTRN board:BYTE
+
     ; Table of piece characters
     ; 0=empty, 1=pawn, 2=knight, 3=bishop, 4=rook, 5=queen, 6=king
     piece_chars DB ' ', 'P', 'N', 'B', 'R', 'Q', 'K'
@@ -46,6 +48,8 @@ light_c:
     mov dh, COLOR_LIGHT
 
 draw_c:
+    push dx
+
     ; Offset calculation
     mov al, ch
     mov ah, CELL_HEIGHT
@@ -61,6 +65,8 @@ draw_c:
     add ax, BOARD_LEFT
     shl ax, 1
     add di, ax
+
+    pop dx
 
     ; Draw 4x2 cell
     mov ah, dh
@@ -178,6 +184,7 @@ p_white:
     or dh, 0Fh         ; White piece
 
 p_draw:
+    push dx
     push ax
     mov al, ch
     mov ah, CELL_HEIGHT
@@ -194,6 +201,7 @@ p_draw:
     shl ax, 1
     add di, ax
     pop ax
+    pop dx
 
     mov ah, dh
     mov es:[di], ax

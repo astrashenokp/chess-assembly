@@ -77,7 +77,7 @@
 
 Move buffer:
 
-    move_list       DB 256 DUP(?) ; достатньо для max ходів
+    move_list       DB 512 DUP(?) ; достатньо для max ходів
 
 Формат одного ходу (4 байти):
 

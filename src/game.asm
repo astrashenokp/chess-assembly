@@ -138,6 +138,7 @@ col EQU [bp+6]
     ; save the piece color
     mov ah, al
     and ah, COLOR_MASK
+    shr ah, 3
     mov bh, ah          ; BH stores the color
 
     ; if current_turn = white
@@ -217,8 +218,8 @@ knight_loop:
 
     ; ah =  piece on the board cell
     xor dh, dh
-    mov si, dx
-    mov aH, board[si]
+    mov di, dx
+    mov aH, board[di]
 
     ; check if square contains same color piece
     mov al, ah
@@ -241,21 +242,17 @@ knight_loop:
     mov [di+1], al
 
     ; to_row
-    mov al, row
-    add al, [si]
-    mov [di+2], al
+    mov [di+2], dl
 
     ; to_col
-    mov al, col
-    add al, [si+1]
-    mov [di+3], al
+    mov [di+2], bl
 
     inc move_count
 
 knight_next:
     add si, 2
     loop knight_loop
-    ret 2 
+    ret 4 
 generate_knight_moves ENDP
 
 
@@ -291,8 +288,8 @@ king_loop:
     add dl, bl
 
     xor dh, dh
-    mov si, dx
-    mov ah, board[si]
+    mov di, dx
+    mov ah, board[di]
 
     ; check if square contains same color piece
     mov al, ah
@@ -314,14 +311,10 @@ king_loop:
     mov [di+1], al
 
     ; to_row
-    mov al, row
-    add al, [si]
-    mov [di+2], al
+    mov [di+2], dl
 
     ; to_col
-    mov al, col
-    add al, [si+1]
-    mov [di+3], al
+    mov [di+3], bl
 
     inc move_count
 
@@ -329,7 +322,7 @@ king_next:
 
     add si, 2
     loop king_loop
-    ret 2
+    ret 4
 generate_king_moves ENDP
 
 
@@ -383,11 +376,11 @@ to_col   EQU [bp+10]
     cmp al, WHITE
     jne black_king_move
 
-    mov white_king_pos, dl
+    mov white_king_pos, al
     jmp not_king
 
 black_king_move:
-    mov black_king_pos, dl
+    mov black_king_pos, al
 
 not_king:
 

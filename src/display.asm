@@ -5,8 +5,9 @@ INCLUDE shared.inc
     EXTRN board:BYTE
 
     ; Table of piece characters
-    ; 0=empty, 1=pawn, 2=knight, 3=bishop, 4=rook, 5=queen, 6=king
-    piece_chars DB ' ', 'P', 'N', 'B', 'R', 'Q', 'K'
+    piece_chars DB ' ', 1, 2, 3, 4, 5, 6
+
+    INCLUDE sprites.inc
 
 .CODE
 ; make procs public for main.asm
@@ -21,6 +22,24 @@ PUBLIC draw_status
 init_video_mode PROC
     mov ax, 0003h
     int 10h
+
+    push bp
+    push es
+
+    mov ax, ds
+    mov es, ax
+
+    mov ax, 1100h           
+    mov bh, 16              
+    mov bl, 0                
+    mov cx, 6               
+    mov dx, 1               
+    mov bp, OFFSET font_data 
+    int 10h  
+
+    pop es                
+    pop bp
+
     mov ax, 0B800h
     mov es, ax
     ret

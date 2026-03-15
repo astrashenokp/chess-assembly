@@ -19,6 +19,8 @@ black_king_pos  DB ?
  
 ; Move buffer
 ; format: from_row, from_col, to_row, to_col
+PUBLIC move_list
+PUBLIC move_count
 move_list   DB 512 DUP(?)
 move_count  DW 0
 
@@ -117,6 +119,15 @@ get_legal_moves PROC
 row EQU [bp+4]
 col EQU [bp+6]
 
+    ; clear move_list
+    mov di, offset move_list
+    mov cx, 512
+    xor al, al
+
+    clear_moves:
+        mov [di], al
+        inc di
+        loop clear_moves
     mov move_count, 0
 
     ; index = row*8 + col
@@ -168,15 +179,19 @@ color_ok:
     jmp done
 
 call_knight:
-    push row
+    push bx
     push col
+    push row
     call generate_knight_moves
+    pop bx
     jmp done
 
 call_king:
-    push row
+    push bx
     push col
+    push row
     call generate_king_moves
+    pop bx
 
 done:
 
@@ -187,6 +202,11 @@ get_legal_moves ENDP
 
 ; KNIGHT
 generate_knight_moves PROC
+    push bp
+    mov bp, sp
+
+row EQU [bp+4]
+col EQU [bp+6]
 knight_moves:
 
     mov si, offset knight_offsets
@@ -212,24 +232,29 @@ knight_loop:
     jg knight_next
 
     ; index = new_row*8 + new_col
-    mov dl, al
-    shl dl, 3
-    add dl, bl
+    mov ah, 0
+    mov di, ax
+    shl di, 3
+    xor bh, bh
+    add di, bx
 
-    ; ah =  piece on the board cell
-    xor dh, dh
-    mov di, dx
-    mov aH, board[di]
+    mov ah, board[di]
+
+    ; if square is empty - add_move
+    cmp ah, EMPTY
+    je add_move
 
     ; check if square contains same color piece
     mov al, ah
-    and al, COLOR_MASK                   
+    and al, COLOR_MASK  
+    shr al, 3                 
 
     cmp al, bh
     je knight_next
 
+add_move:
     ; add the move to move_list
-    mov di, move_count
+    mov di, [move_count]
     shl di, 2
     add di, offset move_list
 
@@ -242,22 +267,32 @@ knight_loop:
     mov [di+1], al
 
     ; to_row
-    mov [di+2], dl
+    mov al, row
+    add al, [si]
+    mov [di+2], al
 
     ; to_col
-    mov [di+2], bl
+    mov bl, col
+    add bl, [si+1]
+    mov [di+3], bl
 
     inc move_count
 
 knight_next:
     add si, 2
     loop knight_loop
+    pop bp
     ret 4 
 generate_knight_moves ENDP
 
 
 ; KING
 generate_king_moves PROC
+    push bp
+    mov bp, sp
+
+row EQU [bp+4]
+col EQU [bp+6]
 king_moves:
 
     mov si, offset king_dirs
@@ -282,14 +317,17 @@ king_loop:
     cmp bl, 7
     jg king_next
 
-    ; index = new_row*8 + new_col
-    mov dl, al
-    shl dl, 3
-    add dl, bl
+    mov ah, 0
+    mov di, ax
+    shl di, 3
+    xor bh, bh
+    add di, bx
 
-    xor dh, dh
-    mov di, dx
     mov ah, board[di]
+
+    ; if square is empty - add_move
+    cmp ah, EMPTY
+    je add_move
 
     ; check if square contains same color piece
     mov al, ah
@@ -298,7 +336,7 @@ king_loop:
     je king_next
 
     ; add move to move_list
-    mov di, move_count
+    mov di, [move_count]
     shl di, 2
     add di, offset move_list
 
@@ -311,9 +349,13 @@ king_loop:
     mov [di+1], al
 
     ; to_row
-    mov [di+2], dl
+    mov al, row
+    add al, [si]
+    mov [di+2], al
 
     ; to_col
+    mov bl, col
+    add bl, [si+1]
     mov [di+3], bl
 
     inc move_count
@@ -322,6 +364,7 @@ king_next:
 
     add si, 2
     loop king_loop
+    pop bp
     ret 4
 generate_king_moves ENDP
 
@@ -376,11 +419,11 @@ to_col   EQU [bp+10]
     cmp al, WHITE
     jne black_king_move
 
-    mov white_king_pos, al
+    mov white_king_pos, dl
     jmp not_king
 
 black_king_move:
-    mov black_king_pos, al
+    mov black_king_pos, dl
 
 not_king:
 

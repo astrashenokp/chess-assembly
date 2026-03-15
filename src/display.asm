@@ -253,23 +253,45 @@ draw_cursor PROC
     shl ax, 1
     add di, ax
 
-    mov ah, 20h         ; Green highlight attribute
-    mov al, es:[di]
-    mov es:[di], ax
-    mov al, es:[di+2]
-    mov es:[di+2], ax
-    mov al, es:[di+4]
-    mov es:[di+4], ax
-    mov al, es:[di+6]
-    mov es:[di+6], ax
-    mov al, es:[di+160]
-    mov es:[di+160], ax
-    mov al, es:[di+162]
-    mov es:[di+162], ax
-    mov al, es:[di+164]
-    mov es:[di+164], ax
-    mov al, es:[di+166]
-    mov es:[di+166], ax
+    mov al, es:[di+1]   
+    and al, 0Fh         
+    or al, 10h          
+    mov es:[di+1], al   
+
+    mov al, es:[di+3]
+    and al, 0Fh
+    or al, 10h
+    mov es:[di+3], al
+
+    mov al, es:[di+5]
+    and al, 0Fh
+    or al, 10h
+    mov es:[di+5], al
+
+    mov al, es:[di+7]
+    and al, 0Fh
+    or al, 10h
+    mov es:[di+7], al
+
+    mov al, es:[di+161]
+    and al, 0Fh
+    or al, 10h
+    mov es:[di+161], al
+
+    mov al, es:[di+163]
+    and al, 0Fh
+    or al, 10h
+    mov es:[di+163], al
+
+    mov al, es:[di+165]
+    and al, 0Fh
+    or al, 10h
+    mov es:[di+165], al
+
+    mov al, es:[di+167]
+    and al, 0Fh
+    or al, 10h
+    mov es:[di+167], al
 
     pop di
     pop dx

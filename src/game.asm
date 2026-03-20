@@ -176,6 +176,15 @@ color_ok:
     cmp al, KING
     je call_king
 
+    cmp al, BISHOP
+    je call_bishop
+
+    cmp al, ROOK
+    je call_rook
+
+    cmp al, QUEEN
+    je call_queen
+
     jmp done
 
 call_knight:
@@ -192,6 +201,44 @@ call_king:
     push row
     call generate_king_moves
     pop bx
+
+call_bishop:
+    push bx
+    push 4
+    push offset bishop_dirs
+    push row
+    push col
+    call generate_sliding_moves
+    pop bx
+    jmp done
+
+call_rook:
+    push bx
+    push 4
+    push offset rook_dirs
+    push row
+    push col
+    call generate_sliding_moves
+    pop bx
+    jmp done
+
+call_queen:
+    push bx
+
+    push 4
+    push offset rook_dirs
+    push row
+    push col
+    call generate_sliding_moves
+
+    push 4
+    push offset bishop_dirs
+    push row
+    push col
+    call generate_sliding_moves
+
+    pop bx
+    jmp done
 
 done:
 
@@ -367,6 +414,133 @@ king_next:
     pop bp
     ret 4
 generate_king_moves ENDP
+
+
+; SLIDING PIECES
+; input:
+;   [bp+4]  = col
+;   [bp+6]  = row
+;   [bp+8]  = offset dir_table
+;   [bp+10] = num_dirs
+generate_sliding_moves PROC
+    push bp
+    mov bp, sp
+
+col       EQU [bp+4]
+row       EQU [bp+6]
+dir_table EQU [bp+8]
+num_dirs  EQU [bp+10]
+
+    mov si, dir_table
+    mov cx, num_dirs
+
+dir_loop:
+    ; nr = row + dr
+    mov al, row
+    add al, [si]
+    mov dl, al          ; DL = nr
+
+    ; nc = col + dc
+    mov al, col
+    add al, [si+1]
+    mov dh, al          ; DH = nc
+
+slide_loop:
+    ; check board edges
+    cmp dl, 0
+    jl next_dir
+    cmp dl, 7
+    jg next_dir
+
+    cmp dh, 0
+    jl next_dir
+    cmp dh, 7
+    jg next_dir
+
+    ; index = nr * 8 + nc
+    mov al, dl
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov al, dh
+    xor ah, ah
+    add di, ax
+
+    ; piece = board[index]
+    mov al, board[di]
+
+    ; check if the square is empty
+    cmp al, EMPTY
+    je sliding_add_empty
+
+    ; check piece color
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, bh
+    je next_dir             ; if the square contains the same color piece - stop direction
+
+    ; if enemy piece - add capture and stop direction
+    jmp sliding_add_capture
+
+sliding_add_empty:
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+
+    mov al, col
+    mov [di+1], al
+
+    mov al, dl
+    mov [di+2], al
+
+    mov al, dh
+    mov [di+3], al
+
+    inc move_count
+
+    ; nr += dr
+    mov al, dl
+    add al, [si]
+    mov dl, al
+
+    ; nc += dc
+    mov al, dh
+    add al, [si+1]
+    mov dh, al
+
+    jmp slide_loop
+
+sliding_add_capture:
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+
+    mov al, col
+    mov [di+1], al
+
+    mov al, dl
+    mov [di+2], al
+
+    mov al, dh
+    mov [di+3], al
+
+    inc move_count
+    jmp next_dir
+
+next_dir:
+    add si, 2
+    loop dir_loop
+
+    pop bp
+    ret 8
+generate_sliding_moves ENDP
 
 
 ; execute_move

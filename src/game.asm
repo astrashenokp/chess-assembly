@@ -145,7 +145,10 @@ col EQU [bp+6]
 
     ; check if the square is empty
     cmp al, EMPTY
-    je done
+    jne piece_found
+    jmp done
+
+piece_found:
 
     ; save the piece color
     mov ah, al
@@ -159,12 +162,13 @@ col EQU [bp+6]
 
     ; current_turn = black
     cmp selected_color, BLACK
-    jne done
-    jmp color_ok
+    je color_ok
+    jmp done
 
     check_white:
     cmp selected_color, WHITE
-    jne done
+    je color_ok
+    jmp done
 
 color_ok:
 
@@ -452,14 +456,25 @@ dir_loop:
 slide_loop:
     ; check board edges
     cmp dl, 0
-    jl next_dir
-    cmp dl, 7
-    jg next_dir
+    jge row_low_ok
+    jmp next_dir
 
+row_low_ok:
+    cmp dl, 7
+    jle row_high_ok
+    jmp next_dir
+
+row_high_ok:
     cmp dh, 0
-    jl next_dir
+    jge col_low_ok
+    jmp next_dir
+
+col_low_ok:
     cmp dh, 7
-    jg next_dir
+    jle col_high_ok
+    jmp next_dir
+
+col_high_ok:
 
     ; index = nr * 8 + nc
     mov al, dl
@@ -482,7 +497,10 @@ slide_loop:
     and al, COLOR_MASK
     shr al, 3
     cmp al, selected_color
-    je next_dir             ; if the square contains the same color piece - stop direction
+    jne enemy_piece
+    jmp next_dir             ; if the square contains the same color piece - stop direction
+
+enemy_piece:
 
     ; if enemy piece - add capture and stop direction
     jmp sliding_add_capture
@@ -540,7 +558,11 @@ sliding_add_capture:
 
 next_dir:
     add si, 2
-    loop dir_loop
+    dec cx
+    jz dir_loop_done
+    jmp dir_loop
+
+dir_loop_done:
 
     pop bp
     ret 8

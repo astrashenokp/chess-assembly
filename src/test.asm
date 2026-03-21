@@ -12,11 +12,14 @@ EXTRN current_turn:BYTE
 queen_msg DB 'QUEEN MOVES',13,10,'$'
 pawn_msg  DB 13,10,'PAWN MOVES',13,10,'$'
 black_pawn_msg DB 13,10,'BLACK PAWN MOVES',13,10,'$'
+white_ep_msg DB 13,10,'WHITE EN PASSANT',13,10,'$'
+black_ep_msg DB 13,10,'BLACK EN PASSANT',13,10,'$'
 
 .CODE
 
 EXTRN init_board:PROC
 EXTRN get_legal_moves:PROC
+EXTRN execute_move:PROC
 
 start:
 
@@ -119,6 +122,58 @@ start:
     ; test black pawn moves from (1,3)
     push 3
     push 1
+    call get_legal_moves
+
+    call print_moves
+
+    ; white en passant test
+    call clear_test_board
+    mov current_turn, 1
+
+    ; black pawn at (1,4), white pawn at (3,3)
+    mov board[12], 9
+    mov board[27], 1
+
+    mov dx, offset white_ep_msg
+    mov ah, 09h
+    int 21h
+
+    ; black double step from (1,4) to (3,4)
+    push 4
+    push 3
+    push 4
+    push 1
+    call execute_move
+
+    ; test white pawn moves from (3,3)
+    push 3
+    push 3
+    call get_legal_moves
+
+    call print_moves
+
+    ; black en passant test
+    call clear_test_board
+    mov current_turn, 0
+
+    ; white pawn at (6,3), black pawn at (4,4)
+    mov board[51], 1
+    mov board[36], 9
+
+    mov dx, offset black_ep_msg
+    mov ah, 09h
+    int 21h
+
+    ; white double step from (6,3) to (4,3)
+    push 3
+    push 4
+    push 3
+    push 6
+    call execute_move
+
+    ; test black pawn moves from (4,4)
+    push 4
+    push 4
     call get_legal_moves
 
     call print_moves

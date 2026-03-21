@@ -17,6 +17,11 @@ current_turn    DB 0      ; 0 = white, 1 = black
 selected_color DB 0       ; color of the selected piece
 PUBLIC waiting_for_promotion
 waiting_for_promotion DB 0
+en_passant_available DB 0
+en_passant_row DB ?
+en_passant_col DB ?
+en_passant_capture_row DB ?
+en_passant_capture_col DB ?
 promotion_row DB ?
 promotion_col DB ?
 promotion_color DB ?
@@ -110,6 +115,7 @@ copy_loop:
 
     mov current_turn, 0
     mov waiting_for_promotion, 0
+    mov en_passant_available, 0
     mov white_king_pos, 60
     mov black_king_pos, 4
     ret
@@ -741,6 +747,19 @@ pawn_left_in_bounds:
     mov al, board[di]
     cmp al, EMPTY
     jne pawn_left_occupied
+    cmp en_passant_available, 1
+    je pawn_left_en_passant
+    jmp pawn_capture_right
+
+pawn_left_en_passant:
+    mov al, dh
+    cmp al, en_passant_row
+    je pawn_left_ep_row_ok
+    jmp pawn_capture_right
+
+pawn_left_ep_row_ok:
+    cmp bl, en_passant_col
+    je pawn_left_enemy
     jmp pawn_capture_right
 
 pawn_left_occupied:
@@ -791,6 +810,19 @@ pawn_right_in_bounds:
     mov al, board[di]
     cmp al, EMPTY
     jne pawn_right_occupied
+    cmp en_passant_available, 1
+    je pawn_right_en_passant
+    jmp pawn_done
+
+pawn_right_en_passant:
+    mov al, dh
+    cmp al, en_passant_row
+    je pawn_right_ep_row_ok
+    jmp pawn_done
+
+pawn_right_ep_row_ok:
+    cmp bl, en_passant_col
+    je pawn_right_enemy
     jmp pawn_done
 
 pawn_right_occupied:
@@ -893,9 +925,92 @@ check_pawn_promotion:
 
     cmp al, PAWN
     je moved_pawn
-    jmp finalize_move
+    jmp clear_old_en_passant
 
 moved_pawn:
+    cmp ah, EMPTY
+    jne pawn_en_passant_checked
+
+    mov al, from_col
+    cmp al, to_col
+    je pawn_en_passant_checked
+
+    cmp en_passant_available, 1
+    je pawn_ep_available
+    jmp pawn_en_passant_checked
+
+pawn_ep_available:
+    mov al, to_row
+    cmp al, en_passant_row
+    je pawn_ep_row_ok
+    jmp pawn_en_passant_checked
+
+pawn_ep_row_ok:
+    mov al, to_col
+    cmp al, en_passant_col
+    je do_en_passant_capture
+    jmp pawn_en_passant_checked
+
+do_en_passant_capture:
+    mov al, en_passant_capture_row
+    shl al, 3
+    add al, en_passant_capture_col
+    xor ah, ah
+    mov di, ax
+    mov board[di], 0
+
+pawn_en_passant_checked:
+    mov en_passant_available, 0
+
+    mov al, bl
+    and al, COLOR_MASK
+    shr al, 3
+
+    cmp al, WHITE
+    jne pawn_black_double_step
+
+    mov al, from_row
+    cmp al, 6
+    je white_from_start
+    jmp check_white_promotion
+
+white_from_start:
+    mov al, to_row
+    cmp al, 4
+    je set_white_en_passant
+    jmp check_white_promotion
+
+set_white_en_passant:
+    mov en_passant_available, 1
+    mov en_passant_row, 5
+    mov al, from_col
+    mov en_passant_col, al
+    mov en_passant_capture_row, 4
+    mov en_passant_capture_col, al
+    jmp check_white_promotion
+
+pawn_black_double_step:
+    mov al, from_row
+    cmp al, 1
+    je black_from_start
+    jmp moved_black_pawn
+
+black_from_start:
+    mov al, to_row
+    cmp al, 3
+    je set_black_en_passant
+    jmp moved_black_pawn
+
+set_black_en_passant:
+    mov en_passant_available, 1
+    mov en_passant_row, 2
+    mov al, from_col
+    mov en_passant_col, al
+    mov en_passant_capture_row, 3
+    mov en_passant_capture_col, al
+    jmp moved_black_pawn
+
+check_white_promotion:
     mov al, bl
     and al, COLOR_MASK
     shr al, 3
@@ -929,6 +1044,10 @@ start_promotion:
     mov promotion_color, al
 
     jmp clear_source_only
+
+clear_old_en_passant:
+    mov en_passant_available, 0
+    jmp finalize_move
 
 finalize_move:
     xor current_turn, 1

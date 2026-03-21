@@ -13,6 +13,7 @@ board DB 64 DUP(?)
  
 ; Global state
 current_turn    DB 0      ; 0 = white, 1 = black
+selected_color DB 0       ; color of the selected piece
 white_king_pos  DB ?
 black_king_pos  DB ?
 
@@ -150,19 +151,19 @@ col EQU [bp+6]
     mov ah, al
     and ah, COLOR_MASK
     shr ah, 3
-    mov bh, ah          ; BH stores the color
+    mov selected_color, ah
 
     ; if current_turn = white
     cmp current_turn, 0
     je check_white
 
     ; current_turn = black
-    cmp bh, BLACK
+    cmp selected_color, BLACK
     jne done
     jmp color_ok
 
     check_white:
-    cmp bh, WHITE
+    cmp selected_color, WHITE
     jne done
 
 color_ok:
@@ -201,6 +202,7 @@ call_king:
     push row
     call generate_king_moves
     pop bx
+    jmp done
 
 call_bishop:
     push bx
@@ -287,19 +289,19 @@ knight_loop:
 
     mov ah, board[di]
 
-    ; if square is empty - add_move
+    ; if square is empty - knight_add_move
     cmp ah, EMPTY
-    je add_move
+    je knight_add_move
 
     ; check if square contains same color piece
     mov al, ah
     and al, COLOR_MASK  
     shr al, 3                 
 
-    cmp al, bh
+    cmp al, selected_color
     je knight_next
 
-add_move:
+knight_add_move:
     ; add the move to move_list
     mov di, [move_count]
     shl di, 2
@@ -372,16 +374,18 @@ king_loop:
 
     mov ah, board[di]
 
-    ; if square is empty - add_move
+    ; if square is empty - king_add_move
     cmp ah, EMPTY
-    je add_move
+    je king_add_move
 
     ; check if square contains same color piece
     mov al, ah
     and al, COLOR_MASK
-    cmp al, bh
+    shr al, 3
+    cmp al, selected_color
     je king_next
 
+king_add_move:
     ; add move to move_list
     mov di, [move_count]
     shl di, 2
@@ -477,7 +481,7 @@ slide_loop:
     ; check piece color
     and al, COLOR_MASK
     shr al, 3
-    cmp al, bh
+    cmp al, selected_color
     je next_dir             ; if the square contains the same color piece - stop direction
 
     ; if enemy piece - add capture and stop direction

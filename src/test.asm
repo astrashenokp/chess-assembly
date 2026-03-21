@@ -7,6 +7,11 @@ INCLUDE shared.inc
 EXTRN board:BYTE
 EXTRN move_list:BYTE
 EXTRN move_count:WORD
+EXTRN current_turn:BYTE
+
+queen_msg DB 'QUEEN MOVES',13,10,'$'
+pawn_msg  DB 13,10,'PAWN MOVES',13,10,'$'
+black_pawn_msg DB 13,10,'BLACK PAWN MOVES',13,10,'$'
 
 .CODE
 
@@ -21,19 +26,8 @@ start:
     ; initialize chess position
     call init_board
 
-    ; test knight at (7,1)
-    ; push 1
-    ; push 7
-
-    ; clear board
-    mov di, offset board
-    mov cx, 64
-    xor al, al
-
-clear_board:
-    mov [di], al
-    inc di
-    loop clear_board
+    ; queen sliding-move test
+    call clear_test_board
 
     ; white queen at (4,3)
     mov board[35], 5
@@ -59,18 +53,102 @@ clear_board:
 ; row 6 . B . b . r . .
 ; row 7 . . . . . . . .
 
+    mov dx, offset queen_msg
+    mov ah, 09h
+    int 21h
+
     ; test queen sliding moves from (4,3)
     push 3
     push 4
     call get_legal_moves
 
+    call print_moves
+
+    ; pawn move test
+    call clear_test_board
+
+    ; white pawn at (6,3)
+    mov board[51], 1
+    mov board[42], 9     ; black pawn at (5,2)
+    mov board[44], 11    ; black bishop at (5,4)
+
+    ;       0 1 2 3 4 5 6 7
+    ; row 0 . . . . . . . .
+    ; row 1 . . . . . . . .
+    ; row 2 . . . . . . . .
+    ; row 3 . . . . . . . .
+    ; row 4 . . . . . . . .
+    ; row 5 . . p . b . . .
+    ; row 6 . . . P . . . .
+    ; row 7 . . . . . . . .
+
+    mov dx, offset pawn_msg
+    mov ah, 09h
+    int 21h
+
+    ; test pawn moves from (6,3)
+    push 3
+    push 6
+    call get_legal_moves
+
+    call print_moves
+
+    ; black pawn move test
+    call clear_test_board
+    mov current_turn, 1
+
+    ; black pawn at (1,3)
+    mov board[11], 9
+    mov board[18], 2     ; white knight at (2,2)
+    mov board[20], 3     ; white bishop at (2,4)
+
+    ;       0 1 2 3 4 5 6 7
+    ; row 0 . . . . . . . .
+    ; row 1 . . . p . . . .
+    ; row 2 . . N . B . . .
+    ; row 3 . . . . . . . .
+    ; row 4 . . . . . . . .
+    ; row 5 . . . . . . . .
+    ; row 6 . . . . . . . .
+    ; row 7 . . . . . . . .
+
+    mov dx, offset black_pawn_msg
+    mov ah, 09h
+    int 21h
+
+    ; test black pawn moves from (1,3)
+    push 3
+    push 1
+    call get_legal_moves
+
+    call print_moves
+
+done:
+
+    mov ax, 4C00h
+    int 21h
+
+
+clear_test_board PROC
+    mov di, offset board
+    mov cx, 64
+    xor al, al
+
+clear_board_loop:
+    mov [di], al
+    inc di
+    loop clear_board_loop
+    ret
+clear_test_board ENDP
+
+
+print_moves PROC
     mov cx, [move_count]
     mov si, offset move_list
 
 print_loop:
-
     cmp cx, 0
-    je done
+    je print_done
 
     ; from_row
     mov dl, [si]
@@ -115,9 +193,8 @@ print_loop:
     dec cx
     jmp print_loop
 
-done:
-
-    mov ax, 4C00h
-    int 21h
+print_done:
+    ret
+print_moves ENDP
 
 END start

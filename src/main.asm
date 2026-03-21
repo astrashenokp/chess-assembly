@@ -13,6 +13,9 @@ INCLUDE shared.inc
     from_col    DW 0
     promotion_msg DB 'Promote to: Q R B N',0
 
+    EXTRN move_list:BYTE
+    EXTRN move_count:WORD
+
 .CODE
 
 PROMOTE_KNIGHT EQU 2
@@ -20,7 +23,7 @@ PROMOTE_BISHOP EQU 3
 PROMOTE_ROOK   EQU 4
 PROMOTE_QUEEN  EQU 5
 PROMOTION_ROW  EQU 20
-PROMOTION_COL  EQU BOARD_LEFT
+PROMOTION_COL  EQU 5  
 PROMOTION_LEN  EQU 19
 
 EXTRN init_video_mode:PROC
@@ -34,21 +37,26 @@ EXTRN is_in_check:PROC
 EXTRN is_square_attacked:PROC
 EXTRN is_checkmate:PROC
 EXTRN ai_turn:PROC
+EXTRN highlight_moves:PROC
+EXTRN draw_status:PROC
 EXTRN waiting_for_promotion:BYTE
 
 start:
     mov ax, @data
     mov ds, ax
 
-    ; Initialize board array with starting position
     call init_board
-
-    ; Set video mode and render the board
     call init_video_mode
 
 game_loop:
     call draw_board
+    call draw_status      
 
+    cmp is_selected, 1
+    jne skip_highlights
+    call highlight_moves  
+
+skip_highlights:
     mov ax, cursor_row
     mov ch, al
     mov ax, cursor_col
@@ -66,7 +74,6 @@ game_loop:
     je move_left
     cmp ah, 4Dh     
     je move_right
-    
     
     cmp al, 0Dh     
     jne check_esc
@@ -104,7 +111,6 @@ move_right:
     inc cursor_col
     jmp game_loop
 
-; Piece selection and movement logic
 select_cell:
     cmp is_selected, 0
     jne check_same_cell
@@ -113,12 +119,35 @@ select_cell:
 check_same_cell:
     mov ax, cursor_row
     cmp ax, from_row
-    jne do_move
+    jne validate_move
     mov ax, cursor_col
     cmp ax, from_col
-    jne do_move
+    jne validate_move
     
     mov is_selected, 0  
+    jmp game_loop
+
+validate_move:
+    mov cx, move_count
+    cmp cx, 0
+    je invalid_move
+    mov si, offset move_list
+
+val_loop:
+    mov ax, cursor_row
+    cmp al, [si+2]
+    jne val_next
+    mov ax, cursor_col
+    cmp al, [si+3]
+    je do_move         
+
+val_next:
+    add si, 4
+    dec cx
+    jnz val_loop
+
+invalid_move:
+    mov is_selected, 0
     jmp game_loop
 
 do_move:
@@ -132,7 +161,6 @@ do_move:
     je move_done
 
     call draw_board
-
     mov ax, cursor_row
     mov ch, al
     mov ax, cursor_col
@@ -158,12 +186,15 @@ pickup_piece:
     mov from_row, ax
     mov ax, cursor_col
     mov from_col, ax
-    
     mov is_selected, 1  
+
+    push cursor_col
+    push cursor_row
+    call get_legal_moves
+
     jmp game_loop
 
 
-; Pawn promotion logic
 handle_promotion PROC
     call draw_promotion_prompt
 
@@ -214,7 +245,6 @@ choose_knight:
     ret
 handle_promotion ENDP
 
-
 draw_promotion_prompt PROC
     push ax
     push bx
@@ -257,7 +287,6 @@ draw_promotion_done:
     pop ax
     ret
 draw_promotion_prompt ENDP
-
 
 clear_promotion_prompt PROC
     push ax

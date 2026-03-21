@@ -3,14 +3,23 @@ INCLUDE shared.inc
 
 .DATA
     EXTRN board:BYTE
+    EXTRN move_list:BYTE
+    EXTRN move_count:WORD
+    EXTRN current_turn:BYTE
 
     ; Table of piece characters
     piece_chars DB ' ', 1, 2, 3, 4, 5, 6
 
+    str_white DB 'TURN: WHITE', 0
+    str_black DB 'TURN: BLACK', 0
+    str_cap   DB 'CAPTURED: (Wait)', 0
+
     INCLUDE sprites.inc
 
 .CODE
-; make procs public for main.asm
+LOCAL_BOARD_LEFT EQU 5 
+LOCAL_BOARD_TOP EQU 2   
+
 PUBLIC init_video_mode
 PUBLIC draw_board
 PUBLIC draw_piece
@@ -18,7 +27,6 @@ PUBLIC draw_cursor
 PUBLIC highlight_moves
 PUBLIC draw_status
 
-; skelet of procs (mocks)
 init_video_mode PROC
     mov ax, 0003h
     int 10h
@@ -68,12 +76,10 @@ light_c:
 
 draw_c:
     push dx
-
-    ; Offset calculation
     mov al, ch
     mov ah, CELL_HEIGHT
     mul ah
-    add ax, BOARD_TOP
+    add ax, LOCAL_BOARD_TOP
     mov bx, 160
     mul bx
     mov di, ax
@@ -81,10 +87,9 @@ draw_c:
     mov al, cl
     mov ah, CELL_WIDTH
     mul ah
-    add ax, BOARD_LEFT
+    add ax, LOCAL_BOARD_LEFT
     shl ax, 1
     add di, ax
-
     pop dx
 
     ; Draw 4x2 cell
@@ -99,27 +104,30 @@ draw_c:
     mov es:[di+164], ax
     mov es:[di+166], ax
 
-    ; Draw piece inside cell
     call draw_piece
 
     inc cl
     cmp cl, 8
-    jl c_loop
+    jge r_loop_check 
+    jmp c_loop
+
+r_loop_check:
     inc ch
     cmp ch, 8
-    jl r_loop
+    jge labels_draw   
+    jmp r_loop
 
-    ; Labels 1-8 (Left)
+labels_draw:
     mov ch, 0
 lbl_r:
     mov al, ch
     mov ah, 2
     mul ah
-    add ax, BOARD_TOP
+    add ax, LOCAL_BOARD_TOP
     mov bx, 160
     mul bx
     mov di, ax
-    mov ax, BOARD_LEFT
+    mov ax, LOCAL_BOARD_LEFT
     sub ax, 2
     shl ax, 1
     add di, ax
@@ -129,12 +137,13 @@ lbl_r:
     mov es:[di], ax
     inc ch
     cmp ch, 8
-    jl lbl_r
+    jge lbl_c_start  
+    jmp lbl_r
 
-    ; Labels a-h (Bottom)
+lbl_c_start:
     mov cl, 0
 lbl_c:
-    mov ax, BOARD_TOP
+    mov ax, LOCAL_BOARD_TOP
     add ax, 16
     mov bx, 160
     mul bx
@@ -142,7 +151,7 @@ lbl_c:
     mov al, cl
     mov ah, 4
     mul ah
-    add ax, BOARD_LEFT
+    add ax, LOCAL_BOARD_LEFT
     inc ax
     shl ax, 1
     add di, ax
@@ -152,8 +161,10 @@ lbl_c:
     mov es:[di], ax
     inc cl
     cmp cl, 8
-    jl lbl_c
+    jge board_end
+    jmp lbl_c
 
+board_end:
     pop di
     pop dx
     pop cx
@@ -167,7 +178,6 @@ draw_piece PROC
     push bx
     push di
 
-    ; Index = row * 8 + col
     mov al, ch
     mov ah, 8
     mul ah
@@ -184,7 +194,6 @@ draw_piece PROC
     xor bh, bh
     mov al, piece_chars[bx]
 
-    ; Colors
     mov dh, ch
     add dh, cl
     test dh, 1
@@ -196,11 +205,11 @@ p_light:
 p_color:
     test dl, COLOR_MASK
     jz p_white
-    and dh, 0F0h       ; Black piece
+    and dh, 0F0h       
     jmp p_draw
 p_white:
     and dh, 0F0h
-    or dh, 0Fh         ; White piece
+    or dh, 0Fh         
 
 p_draw:
     push dx
@@ -208,14 +217,14 @@ p_draw:
     mov al, ch
     mov ah, CELL_HEIGHT
     mul ah
-    add ax, BOARD_TOP
+    add ax, LOCAL_BOARD_TOP
     mov bx, 160
     mul bx
     mov di, ax
     mov al, cl
     mov ah, CELL_WIDTH
     mul ah
-    add ax, BOARD_LEFT
+    add ax, LOCAL_BOARD_LEFT
     inc ax
     shl ax, 1
     add di, ax
@@ -242,14 +251,14 @@ draw_cursor PROC
     mov al, ch
     mov ah, CELL_HEIGHT
     mul ah
-    add ax, BOARD_TOP
+    add ax, LOCAL_BOARD_TOP
     mov bx, 160
     mul bx
     mov di, ax
     mov al, cl
     mov ah, CELL_WIDTH
     mul ah
-    add ax, BOARD_LEFT
+    add ax, LOCAL_BOARD_LEFT
     shl ax, 1
     add di, ax
 
@@ -257,37 +266,30 @@ draw_cursor PROC
     and al, 0Fh         
     or al, 10h          
     mov es:[di+1], al   
-
     mov al, es:[di+3]
     and al, 0Fh
     or al, 10h
     mov es:[di+3], al
-
     mov al, es:[di+5]
     and al, 0Fh
     or al, 10h
     mov es:[di+5], al
-
     mov al, es:[di+7]
     and al, 0Fh
     or al, 10h
     mov es:[di+7], al
-
     mov al, es:[di+161]
     and al, 0Fh
     or al, 10h
     mov es:[di+161], al
-
     mov al, es:[di+163]
     and al, 0Fh
     or al, 10h
     mov es:[di+163], al
-
     mov al, es:[di+165]
     and al, 0Fh
     or al, 10h
     mov es:[di+165], al
-
     mov al, es:[di+167]
     and al, 0Fh
     or al, 10h
@@ -302,10 +304,165 @@ draw_cursor PROC
 draw_cursor ENDP
 
 highlight_moves PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push es
+
+    mov ax, 0B800h
+    mov es, ax
+
+    mov cx, move_count
+    cmp cx, 0
+    jne hm_start
+    jmp hm_end
+hm_start:
+    mov si, offset move_list
+
+hm_loop:
+    push cx  
+
+    mov ch, [si+2] 
+    mov cl, [si+3] 
+
+    mov al, ch
+    mov ah, 8
+    mul ah
+    add al, cl
+    mov bx, ax
+    xor bh, bh
+    mov dl, board[bx]
+
+    mov ah, 20h 
+    cmp dl, 0
+    je hm_apply
+    mov ah, 40h 
+
+hm_apply:
+    push ax
+
+    mov al, ch
+    push cx
+    mov cl, CELL_HEIGHT
+    mul cl
+    add ax, LOCAL_BOARD_TOP
+    mov bx, 160
+    mul bx
+    mov di, ax
+
+    pop cx
+    mov al, cl
+    push cx
+    mov cl, CELL_WIDTH
+    mul cl
+    add ax, LOCAL_BOARD_LEFT
+    shl ax, 1
+    add di, ax
+    pop cx
+
+    pop ax 
+
+    push di
+    add di, 1
+    call paint_8attrs
+    pop di
+
+    push di
+    add di, 161
+    call paint_8attrs
+    pop di
+
+    pop cx  
+
+    add si, 4
+    dec cx
+    jz hm_end
+    jmp hm_loop
+
+hm_end:
+    pop es
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 highlight_moves ENDP
 
+paint_8attrs PROC
+    mov al, es:[di]
+    and al, 0Fh
+    or al, ah
+    mov es:[di], al
+
+    mov al, es:[di+2]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+2], al
+
+    mov al, es:[di+4]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+4], al
+
+    mov al, es:[di+6]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+6], al
+    ret
+paint_8attrs ENDP
+
 draw_status PROC
+    push ax
+    push bx
+    push di
+    push si
+    push es
+
+    mov ax, 0B800h
+    mov es, ax
+
+    cmp current_turn, 0
+    je stat_w
+    mov si, offset str_black
+    jmp stat_draw
+stat_w:
+    mov si, offset str_white
+
+stat_draw:
+    mov di, 160 * 4 + 100 
+    mov ah, 07h
+stat_loop1:
+    mov al, [si]
+    cmp al, 0
+    je stat_cap
+    mov es:[di], ax
+    add di, 2
+    inc si
+    jmp stat_loop1
+
+stat_cap:
+    mov si, offset str_cap
+    mov di, 160 * 6 + 100 
+stat_loop2:
+    mov al, [si]
+    cmp al, 0
+    je stat_end
+    mov es:[di], ax
+    add di, 2
+    inc si
+    jmp stat_loop2
+
+stat_end:
+    pop es
+    pop si
+    pop di
+    pop bx
+    pop ax
     ret
 draw_status ENDP
 

@@ -11,19 +11,30 @@ INCLUDE shared.inc
     is_selected DB 0    ; 0 = no piece selected, 1 = piece selected
     from_row    DW 0
     from_col    DW 0
+    promotion_msg DB 'Promote to: Q R B N',0
 
 .CODE
+
+PROMOTE_KNIGHT EQU 2
+PROMOTE_BISHOP EQU 3
+PROMOTE_ROOK   EQU 4
+PROMOTE_QUEEN  EQU 5
+PROMOTION_ROW  EQU 20
+PROMOTION_COL  EQU BOARD_LEFT
+PROMOTION_LEN  EQU 19
 
 EXTRN init_video_mode:PROC
 EXTRN draw_board:PROC
 EXTRN draw_cursor:PROC
 EXTRN init_board:PROC
 EXTRN execute_move:PROC
+EXTRN finalize_promotion:PROC
 EXTRN get_legal_moves:PROC
 EXTRN is_in_check:PROC
 EXTRN is_square_attacked:PROC
 EXTRN is_checkmate:PROC
 EXTRN ai_turn:PROC
+EXTRN waiting_for_promotion:BYTE
 
 start:
     mov ax, @data
@@ -117,6 +128,28 @@ do_move:
     push from_row       
     call execute_move
 
+    cmp waiting_for_promotion, 0
+    je move_done
+
+    call draw_board
+
+    mov ax, cursor_row
+    mov ch, al
+    mov ax, cursor_col
+    mov cl, al
+    call draw_cursor
+
+    call handle_promotion
+    call clear_promotion_prompt
+    call draw_board
+
+    mov ax, cursor_row
+    mov ch, al
+    mov ax, cursor_col
+    mov cl, al
+    call draw_cursor
+
+move_done:
     mov is_selected, 0
     jmp game_loop
 
@@ -128,6 +161,139 @@ pickup_piece:
     
     mov is_selected, 1  
     jmp game_loop
+
+
+; Pawn promotion logic
+handle_promotion PROC
+    call draw_promotion_prompt
+
+promotion_key_loop:
+    mov ah, 00h
+    int 16h
+
+    cmp al, 'Q'
+    je choose_queen
+    cmp al, 'q'
+    je choose_queen
+
+    cmp al, 'R'
+    je choose_rook
+    cmp al, 'r'
+    je choose_rook
+
+    cmp al, 'B'
+    je choose_bishop
+    cmp al, 'b'
+    je choose_bishop
+
+    cmp al, 'N'
+    je choose_knight
+    cmp al, 'n'
+    je choose_knight
+
+    jmp promotion_key_loop
+
+choose_queen:
+    push PROMOTE_QUEEN
+    call finalize_promotion
+    ret
+
+choose_rook:
+    push PROMOTE_ROOK
+    call finalize_promotion
+    ret
+
+choose_bishop:
+    push PROMOTE_BISHOP
+    call finalize_promotion
+    ret
+
+choose_knight:
+    push PROMOTE_KNIGHT
+    call finalize_promotion
+    ret
+handle_promotion ENDP
+
+
+draw_promotion_prompt PROC
+    push ax
+    push bx
+    push dx
+    push si
+    push di
+    push es
+
+    mov ax, 0B800h
+    mov es, ax
+
+    mov ax, PROMOTION_ROW
+    mov bx, 160
+    mul bx
+    mov di, ax
+
+    mov ax, PROMOTION_COL
+    shl ax, 1
+    add di, ax
+
+    mov si, offset promotion_msg
+
+draw_promotion_char:
+    mov al, [si]
+    cmp al, 0
+    je draw_promotion_done
+
+    mov ah, 07h
+    mov es:[di], ax
+    inc si
+    add di, 2
+    jmp draw_promotion_char
+
+draw_promotion_done:
+    pop es
+    pop di
+    pop si
+    pop dx
+    pop bx
+    pop ax
+    ret
+draw_promotion_prompt ENDP
+
+
+clear_promotion_prompt PROC
+    push ax
+    push bx
+    push dx
+    push di
+    push es
+
+    mov ax, 0B800h
+    mov es, ax
+
+    mov ax, PROMOTION_ROW
+    mov bx, 160
+    mul bx
+    mov di, ax
+
+    mov ax, PROMOTION_COL
+    shl ax, 1
+    add di, ax
+
+    mov dx, PROMOTION_LEN
+
+clear_promotion_char:
+    mov ax, 0720h
+    mov es:[di], ax
+    add di, 2
+    dec dx
+    jnz clear_promotion_char
+
+    pop es
+    pop di
+    pop dx
+    pop bx
+    pop ax
+    ret
+clear_promotion_prompt ENDP
 
 exit_program:
     mov ax, 0003h

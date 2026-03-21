@@ -579,6 +579,9 @@ to_col   EQU [bp+10]
     xor ah, ah
     mov di, ax
 
+    ; save low byte of to_index for king pos
+    mov dl, al
+
     ; captured piece in AH
     mov ah, board[di]
 

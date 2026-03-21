@@ -22,8 +22,46 @@ start:
     call init_board
 
     ; test knight at (7,1)
-    push 1
-    push 7
+    ; push 1
+    ; push 7
+
+    ; clear board
+    mov di, offset board
+    mov cx, 64
+    xor al, al
+
+clear_board:
+    mov [di], al
+    inc di
+    loop clear_board
+
+    ; white queen at (4,3)
+    mov board[35], 5
+
+    mov board[33], 9     ; black pawn at (4,1)
+    mov board[37], 1     ; white pawn at (4,5)
+
+    mov board[19], 2     ; white knight at (2,3)
+    mov board[51], 11    ; black bishop at (6,3)
+
+    mov board[17], 9     ; black pawn at (2,1)
+    mov board[21], 1     ; white pawn at (2,5)
+    mov board[53], 12    ; black rook at (6,5)
+    mov board[49], 3     ; white bishop at (6,1)
+
+;       0 1 2 3 4 5 6 7
+; row 0 . . . . . . . .
+; row 1 . . . . . . . .
+; row 2 . p . N . P . .
+; row 3 . . . . . . . .
+; row 4 . p . Q . P . .
+; row 5 . . . . . . . .
+; row 6 . B . b . r . .
+; row 7 . . . . . . . .
+
+    ; test queen sliding moves from (4,3)
+    push 3
+    push 4
     call get_legal_moves
 
     mov cx, [move_count]

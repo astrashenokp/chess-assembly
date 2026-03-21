@@ -12,8 +12,14 @@ board DB 64 DUP(?)
 
  
 ; Global state
+PUBLIC current_turn
 current_turn    DB 0      ; 0 = white, 1 = black
 selected_color DB 0       ; color of the selected piece
+PUBLIC waiting_for_promotion
+waiting_for_promotion DB 0
+promotion_row DB ?
+promotion_col DB ?
+promotion_color DB ?
 white_king_pos  DB ?
 black_king_pos  DB ?
 
@@ -81,6 +87,7 @@ start_position DB 12,10,11,13,14,11,10,12
 PUBLIC init_board
 PUBLIC get_legal_moves
 PUBLIC execute_move
+PUBLIC finalize_promotion
 PUBLIC is_in_check
 PUBLIC is_square_attacked
 PUBLIC is_checkmate
@@ -102,6 +109,7 @@ copy_loop:
     loop copy_loop
 
     mov current_turn, 0
+    mov waiting_for_promotion, 0
     mov white_king_pos, 60
     mov black_king_pos, 4
     ret
@@ -189,6 +197,13 @@ color_ok:
 
     cmp al, QUEEN
     je call_queen
+    
+    cmp al, PAWN
+    je piece_is_pawn
+    jmp done
+
+piece_is_pawn:
+    jmp call_pawn
 
     jmp done
 
@@ -243,6 +258,14 @@ call_queen:
     push col
     call generate_sliding_moves
 
+    pop bx
+    jmp done
+    
+call_pawn:
+    push bx
+    push col
+    push row
+    call generate_pawn_moves
     pop bx
     jmp done
 
@@ -569,6 +592,240 @@ dir_loop_done:
 generate_sliding_moves ENDP
 
 
+; PAWN
+generate_pawn_moves PROC
+    push bp
+    mov bp, sp
+
+row EQU [bp+4]
+col EQU [bp+6]
+
+    cmp selected_color, WHITE
+    jne pawn_black
+
+    mov dl, -1
+    mov cl, 6
+    jmp pawn_forward
+
+pawn_black:
+    mov dl, 1
+    mov cl, 1
+
+pawn_forward:
+    ; nr = row + dir
+    mov al, row
+    add al, dl
+
+    ; check the edges
+    cmp al, 0
+    jge pawn_row_low_ok
+    jmp pawn_done
+
+pawn_row_low_ok:
+    cmp al, 7
+    jle pawn_row_high_ok
+    jmp pawn_done
+
+pawn_row_high_ok:
+
+    mov dh, al          ; DH = nr
+
+    ; index = nr * 8 + col
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov bl, col
+    xor bh, bh
+    add di, bx
+
+    mov al, board[di]
+
+    cmp al, EMPTY
+    je pawn_forward_empty
+    jmp pawn_captures
+
+pawn_forward_empty:
+
+    ; add 1-square move
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+
+    mov al, col
+    mov [di+1], al
+
+    mov al, dh
+    mov [di+2], al
+
+    mov al, col
+    mov [di+3], al
+
+    inc move_count
+
+    ; double step from the starting row
+    mov al, row
+    cmp al, cl
+    je pawn_start_row_ok
+    jmp pawn_captures
+
+pawn_start_row_ok:
+
+    ; nr2 = row + 2 * dir
+    mov al, row
+    add al, dl
+    add al, dl
+    mov dh, al          ; DH = nr2
+
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov bl, col
+    xor bh, bh
+    add di, bx
+
+    mov al, board[di]
+    cmp al, EMPTY
+    je pawn_double_empty
+    jmp pawn_captures
+
+pawn_double_empty:
+
+    ; add 2-square move
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+
+    mov al, col
+    mov [di+1], al
+
+    mov al, dh
+    mov [di+2], al
+
+    mov al, col
+    mov [di+3], al
+
+    inc move_count
+
+pawn_captures:
+    ; capture row = row + dir
+    mov al, row
+    add al, dl
+    mov dh, al          ; DH = capture row
+
+    ; capture to the left
+    mov al, col
+    dec al
+    cmp al, 0
+    jge pawn_left_in_bounds
+    jmp pawn_capture_right
+
+pawn_left_in_bounds:
+
+    mov bl, al          ; BL = target col
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+    xor bh, bh
+    add di, bx
+
+    mov al, board[di]
+    cmp al, EMPTY
+    jne pawn_left_occupied
+    jmp pawn_capture_right
+
+pawn_left_occupied:
+
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, selected_color
+    jne pawn_left_enemy
+    jmp pawn_capture_right
+
+pawn_left_enemy:
+
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+
+    mov al, col
+    mov [di+1], al
+
+    mov al, dh
+    mov [di+2], al
+
+    mov [di+3], bl
+
+    inc move_count
+
+pawn_capture_right:
+    mov al, col
+    inc al
+    cmp al, 7
+    jle pawn_right_in_bounds
+    jmp pawn_done
+
+pawn_right_in_bounds:
+
+    mov bl, al          ; BL = target col
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+    xor bh, bh
+    add di, bx
+
+    mov al, board[di]
+    cmp al, EMPTY
+    jne pawn_right_occupied
+    jmp pawn_done
+
+pawn_right_occupied:
+
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, selected_color
+    jne pawn_right_enemy
+    jmp pawn_done
+
+pawn_right_enemy:
+
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+
+    mov al, col
+    mov [di+1], al
+
+    mov al, dh
+    mov [di+2], al
+
+    mov [di+3], bl
+
+    inc move_count
+
+pawn_done:
+    pop bp
+    ret 4
+generate_pawn_moves ENDP
+
+
 ; execute_move
 ; input:
 ;   [bp+4]  = from_row
@@ -614,8 +871,10 @@ to_col   EQU [bp+10]
     and al, TYPE_MASK
 
     cmp al, KING
-    jne not_king
+    je update_king_pos
+    jmp check_pawn_promotion
 
+update_king_pos:
     mov al, bl
     and al, COLOR_MASK
 
@@ -623,22 +882,101 @@ to_col   EQU [bp+10]
     jne black_king_move
 
     mov white_king_pos, dl
-    jmp not_king
+    jmp check_pawn_promotion
 
 black_king_move:
     mov black_king_pos, dl
 
-not_king:
+check_pawn_promotion:
+    mov al, bl
+    and al, TYPE_MASK
+
+    cmp al, PAWN
+    je moved_pawn
+    jmp finalize_move
+
+moved_pawn:
+    mov al, bl
+    and al, COLOR_MASK
+    shr al, 3
+
+    cmp al, WHITE
+    jne moved_black_pawn
+
+    mov al, to_row
+    cmp al, 0
+    je start_promotion
+    jmp finalize_move
+
+moved_black_pawn:
+    mov al, to_row
+    cmp al, 7
+    je start_promotion
+    jmp finalize_move
+
+start_promotion:
+    mov waiting_for_promotion, 1
+
+    mov al, to_row
+    mov promotion_row, al
+
+    mov al, to_col
+    mov promotion_col, al
+
+    mov al, bl
+    and al, COLOR_MASK
+    shr al, 3
+    mov promotion_color, al
+
+    jmp clear_source_only
+
+finalize_move:
+    xor current_turn, 1
+
+clear_source_only:
 
     ; clear source square
     mov board[si], 0
 
-    ; change turn
-    xor current_turn, 1
-
     pop bp
     ret 8
 execute_move ENDP
+
+
+; finalize_promotion
+; input: [bp+4] = chosen piece type
+finalize_promotion PROC
+    push bp
+    mov bp, sp
+
+piece_type EQU [bp+4]
+
+    cmp waiting_for_promotion, 1
+    je do_promotion
+    jmp finalize_promotion_done
+
+do_promotion:
+    mov al, promotion_row
+    shl al, 3
+    add al, promotion_col
+    xor ah, ah
+    mov di, ax
+
+    mov al, piece_type
+    and al, TYPE_MASK
+
+    mov ah, promotion_color
+    shl ah, 3
+    or al, ah
+
+    mov board[di], al
+    mov waiting_for_promotion, 0
+    xor current_turn, 1
+
+finalize_promotion_done:
+    pop bp
+    ret 2
+finalize_promotion ENDP
 
  
 ; is_in_check

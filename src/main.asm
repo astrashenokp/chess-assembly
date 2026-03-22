@@ -36,7 +36,6 @@ EXTRN get_legal_moves:PROC
 EXTRN is_in_check:PROC
 EXTRN is_square_attacked:PROC
 EXTRN is_checkmate:PROC
-EXTRN ai_turn:PROC
 EXTRN highlight_moves:PROC
 EXTRN draw_status:PROC
 EXTRN waiting_for_promotion:BYTE
@@ -51,7 +50,7 @@ start:
 game_loop:
     call draw_board
     call draw_status      
-
+    
     cmp is_selected, 1
     jne skip_highlights
     call highlight_moves  
@@ -67,48 +66,65 @@ skip_highlights:
     int 16h
 
     cmp ah, 48h     
-    je move_up
+    jne not_up
+    jmp move_up
+not_up:
     cmp ah, 50h     
-    je move_down
+    jne not_down
+    jmp move_down
+not_down:
     cmp ah, 4Bh    
-    je move_left
+    jne not_left
+    jmp move_left
+not_left:
     cmp ah, 4Dh     
-    je move_right
-    
+    jne not_right
+    jmp move_right
+not_right:
     cmp al, 0Dh     
-    jne check_esc
+    jne not_enter
     jmp select_cell
-
-check_esc:
+not_enter:
     cmp ah, 01h     
     jne ignore_key
+    
+    cmp is_selected, 1
+    je esc_cancel_selection
     jmp exit_program
+
+esc_cancel_selection:
+    mov is_selected, 0
+    jmp game_loop
 
 ignore_key:
     jmp game_loop   
 
 move_up:
     cmp cursor_row, 0
-    je game_loop
+    je end_move_up
     dec cursor_row
+end_move_up:
     jmp game_loop
 
 move_down:
     cmp cursor_row, 7
-    je game_loop
+    je end_move_down
     inc cursor_row
+end_move_down:
     jmp game_loop
 
 move_left:
     cmp cursor_col, 0
-    je game_loop
+    je end_move_left
     dec cursor_col
+end_move_left:
     jmp game_loop
 
 move_right:
     cmp cursor_col, 7
-    je game_loop
+    je end_move_right
     inc cursor_col
+end_move_right:
     jmp game_loop
 
 select_cell:
@@ -170,7 +186,7 @@ do_move:
     call handle_promotion
     call clear_promotion_prompt
     call draw_board
-
+    
     mov ax, cursor_row
     mov ch, al
     mov ax, cursor_col
@@ -186,18 +202,23 @@ pickup_piece:
     mov from_row, ax
     mov ax, cursor_col
     mov from_col, ax
-    mov is_selected, 1  
-
+    
     push cursor_col
     push cursor_row
     call get_legal_moves
 
+    cmp move_count, 0
+    je cancel_selection
+
+    mov is_selected, 1  
     jmp game_loop
 
+cancel_selection:
+    mov is_selected, 0
+    jmp game_loop
 
 handle_promotion PROC
     call draw_promotion_prompt
-
 promotion_key_loop:
     mov ah, 00h
     int 16h

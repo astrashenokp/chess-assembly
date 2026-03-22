@@ -8,6 +8,8 @@ INCLUDE shared.inc
 ; index = row * 8 + col
  
 PUBLIC board
+PUBLIC move_list
+PUBLIC move_count
 board DB 64 DUP(?)
 
  
@@ -27,6 +29,11 @@ promotion_col DB ?
 promotion_color DB ?
 white_king_pos  DB ?
 black_king_pos  DB ?
+PUBLIC captured_by_white, captured_by_black, cap_w_count, cap_b_count
+captured_by_white DB 16 DUP(0)
+captured_by_black DB 16 DUP(0)
+cap_w_count DW 0
+cap_b_count DW 0
 
  
 ; Move buffer
@@ -118,6 +125,10 @@ copy_loop:
     mov en_passant_available, 0
     mov white_king_pos, 60
     mov black_king_pos, 4
+    
+    mov cap_w_count, 0
+    mov cap_b_count, 0
+    
     ret
 init_board ENDP
 
@@ -895,6 +906,11 @@ to_col   EQU [bp+10]
 
     ; captured piece in AH
     mov ah, board[di]
+    cmp ah, EMPTY
+    je skip_rec
+    call record_capture
+
+skip_rec:
 
     ; move piece
     mov board[di], bl
@@ -956,8 +972,12 @@ do_en_passant_capture:
     shl al, 3
     add al, en_passant_capture_col
     xor ah, ah
+    push di
     mov di, ax
+    mov ah, board[di] 
+    call record_capture
     mov board[di], 0
+    pop di
 
 pawn_en_passant_checked:
     mov en_passant_available, 0
@@ -1060,6 +1080,35 @@ clear_source_only:
     pop bp
     ret 8
 execute_move ENDP
+
+
+record_capture PROC
+    push ax
+    push bx
+    push di
+
+    mov al, ah
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, WHITE
+    je cap_by_black
+
+    mov di, cap_w_count
+    mov captured_by_white[di], ah
+    inc cap_w_count
+    jmp cap_done
+
+cap_by_black:
+    mov di, cap_b_count
+    mov captured_by_black[di], ah
+    inc cap_b_count
+
+cap_done:
+    pop di
+    pop bx
+    pop ax
+    ret
+record_capture ENDP
 
 
 ; finalize_promotion

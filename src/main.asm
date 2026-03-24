@@ -11,7 +11,7 @@ INCLUDE shared.inc
     is_selected DB 0    ; 0 = no piece selected, 1 = piece selected
     from_row    DW 0
     from_col    DW 0
-    promotion_msg DB 'Promote to: Q R B N',0
+    promotion_msg DB 'Choose: 1-Q 2-R 3-B 4-N',0
 
     EXTRN move_list:BYTE
     EXTRN move_count:WORD
@@ -24,7 +24,7 @@ PROMOTE_ROOK   EQU 4
 PROMOTE_QUEEN  EQU 5
 PROMOTION_ROW  EQU 20
 PROMOTION_COL  EQU 5  
-PROMOTION_LEN  EQU 19
+PROMOTION_LEN  EQU 24
 
 EXTRN init_video_mode:PROC
 EXTRN draw_board:PROC
@@ -219,28 +219,21 @@ cancel_selection:
 
 handle_promotion PROC
     call draw_promotion_prompt
+
 promotion_key_loop:
     mov ah, 00h
     int 16h
 
-    cmp al, 'Q'
-    je choose_queen
-    cmp al, 'q'
+    cmp al, '1'
     je choose_queen
 
-    cmp al, 'R'
-    je choose_rook
-    cmp al, 'r'
+    cmp al, '2'
     je choose_rook
 
-    cmp al, 'B'
-    je choose_bishop
-    cmp al, 'b'
+    cmp al, '3'
     je choose_bishop
 
-    cmp al, 'N'
-    je choose_knight
-    cmp al, 'n'
+    cmp al, '4'
     je choose_knight
 
     jmp promotion_key_loop

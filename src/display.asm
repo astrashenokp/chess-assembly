@@ -25,7 +25,6 @@ INCLUDE shared.inc
 LOCAL_BOARD_LEFT EQU 5 
 LOCAL_BOARD_TOP EQU 2   
 
-; make procs public for main.asm
 PUBLIC init_video_mode
 PUBLIC draw_board
 PUBLIC draw_piece
@@ -349,10 +348,35 @@ hm_loop:
     xor bh, bh
     mov dl, board[bx]
 
-    mov ah, 20h 
-    cmp dl, 0
-    je hm_apply
-    mov ah, 40h 
+    mov al, dl
+    and al, TYPE_MASK
+    cmp al, 0
+    jne hm_red
+
+    push bx
+    mov al, [si]
+    mov ah, 8
+    mul ah
+    add al, [si+1]
+    mov bx, ax
+    xor bh, bh
+    mov al, board[bx]
+    pop bx
+
+    and al, TYPE_MASK
+    cmp al, 1
+    jne hm_green
+
+    mov al, [si+1]
+    cmp al, [si+3]
+    je hm_green
+
+hm_red:
+    mov ah, 40h
+    jmp hm_apply
+
+hm_green:
+    mov ah, 20h
 
 hm_apply:
     push ax

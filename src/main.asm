@@ -4,11 +4,10 @@
 INCLUDE shared.inc
 
 .DATA
-    ; Current cursor coordinates
     cursor_row DW 6
     cursor_col DW 4
 
-    is_selected DB 0    ; 0 = no piece selected, 1 = piece selected
+    is_selected DB 0    
     from_row    DW 0
     from_col    DW 0
     promotion_msg DB 'Promote: 1-Q 2-R 3-B 4-N',0
@@ -17,6 +16,32 @@ INCLUDE shared.inc
 
     EXTRN move_list:BYTE
     EXTRN move_count:WORD
+
+    ai_mode       DB 0
+    ai_color      DB 0
+    ai_difficulty DB 0
+
+    title_msg     DB '=== CHESS ENGINE ===', 0
+    
+    icon_1v1_1    DB '   _O_  _O_   ', 0
+    icon_1v1_2    DB '    | vs |    ', 0
+    icon_1v1_3    DB '   / \  / \   ', 0
+    text_1v1      DB '  1. 1 vs 1   ', 0
+
+    icon_ai_1     DB '    [0_0]     ', 0
+    icon_ai_2     DB '   --[_]--    ', 0
+    icon_ai_3     DB '    /   \     ', 0
+    text_ai       DB '  2. vs AI    ', 0
+
+    col_title     DB 'CHOOSE YOUR COLOR:', 0
+    col_w         DB '1. WHITE', 0
+    col_b         DB '2. BLACK', 0
+    msg_enter     DB '(Press ENTER to confirm)', 0
+
+    dif_title     DB 'CHOOSE AI DIFFICULTY:', 0
+    dif_easy      DB '1. EASY   (Bober z Ushuaia)', 0
+    dif_med       DB '2. MEDIUM (Zaychyk Judy Hopps)', 0
+    dif_hard      DB '3. HARD   (Pes Patron)', 0
 
 .CODE
 
@@ -35,9 +60,6 @@ EXTRN init_board:PROC
 EXTRN execute_move:PROC
 EXTRN finalize_promotion:PROC
 EXTRN get_legal_moves:PROC
-EXTRN is_in_check:PROC
-EXTRN is_square_attacked:PROC
-EXTRN is_checkmate:PROC
 EXTRN highlight_moves:PROC
 EXTRN draw_status:PROC
 EXTRN waiting_for_promotion:BYTE
@@ -46,13 +68,259 @@ start:
     mov ax, @data
     mov ds, ax
 
-    call init_board
     call init_video_mode
-
     mov ax, 0000h       
     int 33h
     mov ax, 0001h       
     int 33h
+
+main_menu:
+    call clear_screen
+    mov ax, 0002h
+    int 33h
+
+    mov si, offset title_msg
+    mov dh, 3
+    mov dl, 30
+    mov bl, 0Fh
+    call draw_string
+
+    mov si, offset icon_1v1_1
+    mov dh, 8
+    mov dl, 20
+    mov bl, 0Bh
+    call draw_string
+    mov si, offset icon_1v1_2
+    mov dh, 9
+    mov dl, 20
+    mov bl, 0Bh
+    call draw_string
+    mov si, offset icon_1v1_3
+    mov dh, 10
+    mov dl, 20
+    mov bl, 0Bh
+    call draw_string
+    mov si, offset text_1v1
+    mov dh, 12
+    mov dl, 20
+    mov bl, 0Fh
+    call draw_string
+
+    mov si, offset icon_ai_1
+    mov dh, 8
+    mov dl, 45
+    mov bl, 0Ch
+    call draw_string
+    mov si, offset icon_ai_2
+    mov dh, 9
+    mov dl, 45
+    mov bl, 0Ch
+    call draw_string
+    mov si, offset icon_ai_3
+    mov dh, 10
+    mov dl, 45
+    mov bl, 0Ch
+    call draw_string
+    mov si, offset text_ai
+    mov dh, 12
+    mov dl, 45
+    mov bl, 0Fh
+    call draw_string
+
+    mov ax, 0001h
+    int 33h
+
+mm_wait_key:
+    mov ah, 00h
+    int 16h
+    cmp al, '1'
+    je start_1v1
+    cmp al, '2'
+    je menu_color
+    jmp mm_wait_key
+
+start_1v1:
+    mov ai_mode, 0
+    jmp start_game
+
+menu_color:
+    mov ai_mode, 1
+mc_draw:
+    call clear_screen
+    mov ax, 0002h
+    int 33h
+
+    mov si, offset col_title
+    mov dh, 8
+    mov dl, 30
+    mov bl, 0Fh
+    call draw_string
+
+    mov si, offset col_w
+    mov dh, 10
+    mov dl, 35
+    mov bl, 07h
+    cmp ai_color, 0
+    jne mc_draw_w
+    mov bl, 0Ah
+mc_draw_w:
+    call draw_string
+
+    mov si, offset col_b
+    mov dh, 12
+    mov dl, 35
+    mov bl, 07h
+    cmp ai_color, 1
+    jne mc_draw_b
+    mov bl, 0Ah
+mc_draw_b:
+    call draw_string
+
+    mov si, offset msg_enter
+    mov dh, 16
+    mov dl, 28
+    mov bl, 08h
+    call draw_string
+
+    mov ax, 0001h
+    int 33h
+
+mc_wait_key:
+    mov ah, 00h
+    int 16h
+    cmp al, '1'
+    jne mc_check_2
+    mov ai_color, 0
+    jmp mc_draw
+mc_check_2:
+    cmp al, '2'
+    jne mc_check_enter
+    mov ai_color, 1
+    jmp mc_draw
+mc_check_enter:
+    cmp al, 0Dh
+    je menu_diff
+    jmp mc_wait_key
+
+menu_diff:
+md_draw:
+    call clear_screen
+    mov ax, 0002h
+    int 33h
+
+    mov si, offset dif_title
+    mov dh, 6
+    mov dl, 28
+    mov bl, 0Fh
+    call draw_string
+
+    mov si, offset dif_easy
+    mov dh, 9
+    mov dl, 22
+    mov bl, 07h
+    cmp ai_difficulty, 0
+    jne md_draw_e
+    mov bl, 0Ah
+md_draw_e:
+    call draw_string
+
+    mov si, offset dif_med
+    mov dh, 11
+    mov dl, 22
+    mov bl, 07h
+    cmp ai_difficulty, 1
+    jne md_draw_m
+    mov bl, 0Eh
+md_draw_m:
+    call draw_string
+
+    mov si, offset dif_hard
+    mov dh, 13
+    mov dl, 22
+    mov bl, 07h
+    cmp ai_difficulty, 2
+    jne md_draw_h
+    mov bl, 0Ch
+md_draw_h:
+    call draw_string
+
+    mov si, offset msg_enter
+    mov dh, 17
+    mov dl, 28
+    mov bl, 08h
+    call draw_string
+
+    mov ax, 0001h
+    int 33h
+
+md_wait_key:
+    mov ah, 00h
+    int 16h
+    cmp al, '1'
+    jne md_check_2
+    mov ai_difficulty, 0
+    jmp md_draw
+md_check_2:
+    cmp al, '2'
+    jne md_check_3
+    mov ai_difficulty, 1
+    jmp md_draw
+md_check_3:
+    cmp al, '3'
+    jne md_check_enter
+    mov ai_difficulty, 2
+    jmp md_draw
+md_check_enter:
+    cmp al, 0Dh
+    jne md_ignore_enter
+    jmp main_menu
+md_ignore_enter:
+    jmp md_wait_key
+
+clear_screen PROC
+    push ax bx cx dx
+    mov ax, 0600h
+    mov bh, 00h
+    mov cx, 0000h
+    mov dx, 184Fh
+    int 10h
+    pop dx cx bx ax
+    ret
+clear_screen ENDP
+
+draw_string PROC
+    push ax bx cx dx di es
+    mov ax, 0B800h
+    mov es, ax
+    
+    mov al, 80
+    mul dh
+    mov dh, 0
+    add ax, dx
+    shl ax, 1
+    mov di, ax
+
+ds_loop:
+    mov al, [si]
+    cmp al, 0
+    je ds_done
+    mov es:[di], al
+    mov es:[di+1], bl
+    inc si
+    add di, 2
+    jmp ds_loop
+ds_done:
+    pop es di dx cx bx ax
+    ret
+draw_string ENDP
+
+start_game:
+    call clear_screen
+    call init_board
+    call init_video_mode
+    mov ax, 0001h
+    int 33h
+    mov need_redraw, 1
 
 game_loop:
     cmp need_redraw, 1
@@ -83,7 +351,7 @@ skip_highlights:
 check_input:
     mov ah, 01h         
     int 16h
-    jnz has_key         ; Трамплін для клавіатури
+    jnz has_key         
     jmp check_mouse
 
 has_key:
@@ -126,13 +394,12 @@ esc_cancel_selection:
 ignore_key:
     jmp game_loop   
 
-
 check_mouse:
     mov ax, 0003h       
     int 33h
 
     test bx, 1          
-    jnz wait_mouse_release  ; Трамплін для мишки
+    jnz wait_mouse_release  
     jmp game_loop
 
 wait_mouse_release:
@@ -169,7 +436,6 @@ wait_mouse_release:
 
 ignore_mouse:
     jmp game_loop
-
 
 move_up:
     cmp cursor_row, 0
@@ -292,7 +558,6 @@ cancel_selection:
     mov is_selected, 0
     jmp game_loop
 
-
 handle_promotion PROC
     mov ax, 0002h
     int 33h
@@ -304,16 +569,12 @@ promotion_key_loop:
 
     cmp al, '1'
     je choose_queen
-
     cmp al, '2'
     je choose_rook
-
     cmp al, '3'
     je choose_bishop
-
     cmp al, '4'
     je choose_knight
-
     jmp promotion_key_loop
 
 choose_queen:
@@ -346,88 +607,56 @@ choose_knight:
 handle_promotion ENDP
 
 draw_promotion_prompt PROC
-    push ax
-    push bx
-    push dx
-    push si
-    push di
-    push es
-
+    push ax bx dx si di es
     mov ax, 0B800h
     mov es, ax
-
     mov ax, PROMOTION_ROW
     mov bx, 160
     mul bx
     mov di, ax
-
     mov ax, PROMOTION_COL
     shl ax, 1
     add di, ax
-
     mov si, offset promotion_msg
-
 draw_promotion_char:
     mov al, [si]
     cmp al, 0
     je draw_promotion_done
-
     mov ah, 07h
     mov es:[di], ax
     inc si
     add di, 2
     jmp draw_promotion_char
-
 draw_promotion_done:
-    pop es
-    pop di
-    pop si
-    pop dx
-    pop bx
-    pop ax
+    pop es di si dx bx ax
     ret
 draw_promotion_prompt ENDP
 
 clear_promotion_prompt PROC
-    push ax
-    push bx
-    push dx
-    push di
-    push es
-
+    push ax bx dx di es
     mov ax, 0B800h
     mov es, ax
-
     mov ax, PROMOTION_ROW
     mov bx, 160
     mul bx
     mov di, ax
-
     mov ax, PROMOTION_COL
     shl ax, 1
     add di, ax
-
     mov dx, PROMOTION_LEN
-
 clear_promotion_char:
     mov ax, 0720h
     mov es:[di], ax
     add di, 2
     dec dx
     jnz clear_promotion_char
-
-    pop es
-    pop di
-    pop dx
-    pop bx
-    pop ax
+    pop es di dx bx ax
     ret
 clear_promotion_prompt ENDP
 
 exit_program:
     mov ax, 0003h
     int 10h
-
     mov ah, 4Ch
     int 21h
 

@@ -34,6 +34,13 @@ captured_by_white DB 16 DUP(0)
 captured_by_black DB 16 DUP(0)
 cap_w_count DW 0
 cap_b_count DW 0
+test_saved_from DB 0
+test_saved_to DB 0
+test_saved_white_king_pos DB 0
+test_saved_black_king_pos DB 0
+test_saved_ep_piece DB 0
+test_saved_ep_index DB 0
+test_ep_active DB 0
 
  
 ; Move buffer
@@ -230,7 +237,7 @@ call_knight:
     push row
     call generate_knight_moves
     pop bx
-    jmp done
+    jmp filter_generated
 
 call_king:
     push bx
@@ -238,7 +245,7 @@ call_king:
     push row
     call generate_king_moves
     pop bx
-    jmp done
+    jmp filter_generated
 
 call_bishop:
     push bx
@@ -248,7 +255,7 @@ call_bishop:
     push col
     call generate_sliding_moves
     pop bx
-    jmp done
+    jmp filter_generated
 
 call_rook:
     push bx
@@ -258,7 +265,7 @@ call_rook:
     push col
     call generate_sliding_moves
     pop bx
-    jmp done
+    jmp filter_generated
 
 call_queen:
     push bx
@@ -276,7 +283,7 @@ call_queen:
     call generate_sliding_moves
 
     pop bx
-    jmp done
+    jmp filter_generated
     
 call_pawn:
     push bx
@@ -284,6 +291,10 @@ call_pawn:
     push row
     call generate_pawn_moves
     pop bx
+    jmp filter_generated
+
+filter_generated:
+    call filter_legal_moves
     jmp done
 
 done:
@@ -1146,6 +1157,283 @@ finalize_promotion_done:
     ret 2
 finalize_promotion ENDP
 
+
+; make_test_move PROC
+; input: 
+; [bp+4] = from_row
+; [bp+6] = from_col
+; [bp+8] = to_row
+; [bp+10] = to_col
+make_test_move PROC
+    push bp
+    mov bp, sp
+    push ax
+    push bx
+    push dx
+    push si
+    push di
+
+from_row EQU [bp+4]
+from_col EQU [bp+6]
+to_row   EQU [bp+8]
+to_col   EQU [bp+10]
+
+    ; clear temporary en passant state for this tested move
+    mov test_ep_active, 0
+
+    ; save king positions so undo can restore them
+    mov al, white_king_pos
+    mov test_saved_white_king_pos, al
+    mov al, black_king_pos
+    mov test_saved_black_king_pos, al
+
+    mov al, from_row
+    shl al, 3
+    add al, from_col
+    xor ah, ah
+    mov si, ax
+
+    mov al, to_row
+    shl al, 3
+    add al, to_col
+    xor ah, ah
+    mov di, ax
+
+    mov bl, board[si]
+    mov test_saved_from, bl
+
+    mov al, board[di]
+    mov test_saved_to, al
+
+    ; make the move only on board state
+    mov board[di], bl
+    mov board[si], EMPTY
+
+    ; if a king moved, update its temporary position
+    mov al, bl
+    and al, TYPE_MASK
+    cmp al, KING
+    jne test_pawn_move
+
+    mov al, bl
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, WHITE
+    jne test_black_king_move
+
+    mov al, to_row
+    shl al, 3
+    add al, to_col
+    mov white_king_pos, al
+    jmp test_move_done
+
+test_black_king_move:
+    mov al, to_row
+    shl al, 3
+    add al, to_col
+    mov black_king_pos, al
+    jmp test_move_done
+
+test_pawn_move:
+    ; temporary en passant capture
+    mov al, bl
+    and al, TYPE_MASK
+    cmp al, PAWN
+    jne test_move_done
+
+    mov al, test_saved_to
+    cmp al, EMPTY
+    jne test_move_done
+
+    mov al, from_col
+    cmp al, to_col
+    je test_move_done
+
+    cmp en_passant_available, 1
+    jne test_move_done
+
+    mov al, to_row
+    cmp al, en_passant_row
+    jne test_move_done
+
+    mov al, to_col
+    cmp al, en_passant_col
+    jne test_move_done
+
+    mov al, en_passant_capture_row
+    shl al, 3
+    add al, en_passant_capture_col
+    mov test_saved_ep_index, al
+
+    xor ah, ah
+    mov di, ax
+    mov al, board[di]
+    mov test_saved_ep_piece, al
+    mov board[di], EMPTY
+    mov test_ep_active, 1
+
+test_move_done:
+    pop di
+    pop si
+    pop dx
+    pop bx
+    pop ax
+    pop bp
+    ret 8
+make_test_move ENDP
+
+
+undo_test_move PROC
+    push bp
+    mov bp, sp
+    push ax
+    push si
+    push di
+
+from_row EQU [bp+4]
+from_col EQU [bp+6]
+to_row   EQU [bp+8]
+to_col   EQU [bp+10]
+
+    ; restore both board squares
+    mov al, from_row
+    shl al, 3
+    add al, from_col
+    xor ah, ah
+    mov si, ax
+
+    mov al, to_row
+    shl al, 3
+    add al, to_col
+    xor ah, ah
+    mov di, ax
+
+    mov al, test_saved_from
+    mov board[si], al
+
+    mov al, test_saved_to
+    mov board[di], al
+
+    ; restore king positions
+    mov al, test_saved_white_king_pos
+    mov white_king_pos, al
+    mov al, test_saved_black_king_pos
+    mov black_king_pos, al
+
+    ; restore captured pawn if the tested move was en passant
+    cmp test_ep_active, 1
+    jne undo_test_done
+
+    mov al, test_saved_ep_index
+    xor ah, ah
+    mov di, ax
+    mov al, test_saved_ep_piece
+    mov board[di], al
+    mov test_ep_active, 0
+
+undo_test_done:
+    pop di
+    pop si
+    pop ax
+    pop bp
+    ret 8
+undo_test_move ENDP
+
+
+filter_legal_moves PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+
+    mov si, offset move_list
+    mov di, offset move_list
+    mov cx, move_count
+    xor dx, dx
+
+    cmp cx, 0
+    jne filter_loop
+    jmp filter_done
+
+filter_loop:
+    ; make-check-undo
+    xor ax, ax
+    mov al, [si+3]
+    push ax
+
+    xor ax, ax
+    mov al, [si+2]
+    push ax
+
+    xor ax, ax
+    mov al, [si+1]
+    push ax
+
+    xor ax, ax
+    mov al, [si]
+    push ax
+    call make_test_move
+
+    xor ax, ax
+    mov al, selected_color
+    push ax
+    call is_in_check
+    mov bl, al
+
+    ; restore board state
+    xor ax, ax
+    mov al, [si+3]
+    push ax
+
+    xor ax, ax
+    mov al, [si+2]
+    push ax
+
+    xor ax, ax
+    mov al, [si+1]
+    push ax
+
+    xor ax, ax
+    mov al, [si]
+    push ax
+    call undo_test_move
+
+    ; keep only moves that do not leave own king in check
+    cmp bl, 0
+    jne skip_legal_move
+
+    mov al, [si]
+    mov [di], al
+    mov al, [si+1]
+    mov [di+1], al
+    mov al, [si+2]
+    mov [di+2], al
+    mov al, [si+3]
+    mov [di+3], al
+
+    add di, 4
+    inc dx
+
+skip_legal_move:
+    add si, 4
+    dec cx
+    jz filter_done
+    jmp filter_loop
+
+filter_done:
+    mov move_count, dx
+
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+filter_legal_moves ENDP
+
  
 ; is_in_check
 ; input: [bp+4] = color
@@ -1153,9 +1441,41 @@ finalize_promotion ENDP
 is_in_check PROC
     push bp
     mov bp, sp
+    push bx
+    push dx
 
 color EQU [bp+4]
 
+    mov al, color
+    cmp al, WHITE
+    jne load_black_king_pos
+
+    mov al, white_king_pos
+    jmp king_pos_loaded
+
+load_black_king_pos:
+    mov al, black_king_pos
+
+king_pos_loaded:
+    ; board index into row / col 
+    mov dl, al
+    and dl, 7
+    shr al, 3
+
+    xor bh, bh
+    mov bl, color
+    xor bl, 1
+
+    xor dh, dh
+    xor ah, ah
+
+    push bx
+    push dx
+    push ax
+    call is_square_attacked
+
+    pop dx
+    pop bx
     pop bp
     ret 2 
 is_in_check ENDP
@@ -1169,6 +1489,11 @@ is_in_check ENDP
 is_square_attacked PROC
     push bp
     mov bp, sp
+    push si
+    push di
+    push bx
+    push cx
+    push dx
 
 row   EQU [bp+4]
 col   EQU [bp+6]
@@ -1298,7 +1623,7 @@ bishop_done:
     mov si, offset knight_offsets
     mov cx, 8
 
-knight_loop:
+knight_loop_check:
     mov dh, row
     add dh, [si]
 
@@ -1306,14 +1631,14 @@ knight_loop:
     add dl, [si+1]
 
     cmp dh, 0
-    jl knight_next
+    jl knight_check_next
     cmp dh, 7
-    jg knight_next
+    jg knight_check_next
 
     cmp dl, 0
-    jl knight_next
+    jl knight_check_next
     cmp dl, 7
-    jg knight_next
+    jg knight_check_next
 
     mov al, dh
     xor ah, ah
@@ -1326,25 +1651,25 @@ knight_loop:
 
     mov ah, board[di]
     cmp ah, EMPTY
-    je knight_next
+    je knight_check_next
 
     mov al, ah
     and al, COLOR_MASK
     shr al, 3
     cmp al, bl
-    jne knight_next
+    jne knight_check_next
 
     mov al, ah
     and al, TYPE_MASK
     cmp al, KNIGHT
-    jne knight_next
+    jne knight_check_next
     jmp attacked_done
 
-knight_next:
+knight_check_next:
     add si, 2
     dec cx
     jz check_pawns
-    jmp knight_loop
+    jmp knight_loop_check
 
 check_pawns:
     ; pawn attacks
@@ -1363,7 +1688,10 @@ pawn_attack_row_ready:
     add dh, bh
 
     cmp dh, 0
-    jl check_king
+    jge check_next_bound
+    jmp check_king
+    
+check_next_bound: 
     cmp dh, 7
     jg check_king
 
@@ -1435,7 +1763,7 @@ check_king:
     mov si, offset king_dirs
     mov cx, 8
 
-king_loop:
+king_loop_check:
     mov dh, row
     add dh, [si]
 
@@ -1443,14 +1771,14 @@ king_loop:
     add dl, [si+1]
 
     cmp dh, 0
-    jl king_next
+    jl king_check_next
     cmp dh, 7
-    jg king_next
+    jg king_check_next
 
     cmp dl, 0
-    jl king_next
+    jl king_check_next
     cmp dl, 7
-    jg king_next
+    jg king_check_next
 
     mov al, dh
     xor ah, ah
@@ -1463,25 +1791,25 @@ king_loop:
 
     mov ah, board[di]
     cmp ah, EMPTY
-    je king_next
+    je king_check_next
 
     mov al, ah
     and al, COLOR_MASK
     shr al, 3
     cmp al, bl
-    jne king_next
+    jne king_check_next
 
     mov al, ah
     and al, TYPE_MASK
     cmp al, KING
-    jne king_next
+    jne king_check_next
     jmp attacked_done
 
-king_next:
+king_check_next:
     add si, 2
     dec cx
     jz not_attacked
-    jmp king_loop
+    jmp king_loop_check
 
 attacked_done:
     mov al, 1
@@ -1491,6 +1819,11 @@ not_attacked:
     xor al, al
 
 is_square_attacked_exit:
+    pop dx
+    pop cx
+    pop bx
+    pop di
+    pop si
     pop bp
     ret 6
 is_square_attacked ENDP

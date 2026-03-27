@@ -1168,12 +1168,329 @@ is_in_check ENDP
 ; output: AL = 1 if square attacked
 is_square_attacked PROC
     push bp
-     mov bp, sp
+    mov bp, sp
 
 row   EQU [bp+4]
 col   EQU [bp+6]
 color EQU [bp+8]
 
+    mov bl, color
+
+    ; rook / queen attacks on straight lines
+    mov si, offset rook_dirs
+    mov cx, 4
+
+rook_dir_loop:
+    mov dh, row
+    mov dl, col
+
+rook_step_loop:
+    add dh, [si]
+    add dl, [si+1]
+
+    cmp dh, 0
+    jl rook_next_dir
+    cmp dh, 7
+    jg rook_next_dir
+
+    cmp dl, 0
+    jl rook_next_dir
+    cmp dl, 7
+    jg rook_next_dir
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov al, dl
+    xor ah, ah
+    add di, ax
+
+    mov ah, board[di]
+    cmp ah, EMPTY
+    je rook_step_loop
+
+    mov al, ah
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, bl
+    jne rook_next_dir
+
+    mov al, ah
+    and al, TYPE_MASK
+    cmp al, ROOK
+    jne rook_check_queen
+    jmp attacked_done
+
+rook_check_queen:
+    cmp al, QUEEN
+    jne rook_next_dir
+    jmp attacked_done
+
+rook_next_dir:
+    add si, 2
+    dec cx
+    jz rook_done
+    jmp rook_dir_loop
+
+rook_done:
+    ; bishop / queen attacks on diagonals
+    mov si, offset bishop_dirs
+    mov cx, 4
+
+bishop_dir_loop:
+    mov dh, row
+    mov dl, col
+
+bishop_step_loop:
+    add dh, [si]
+    add dl, [si+1]
+
+    cmp dh, 0
+    jl bishop_next_dir
+    cmp dh, 7
+    jg bishop_next_dir
+
+    cmp dl, 0
+    jl bishop_next_dir
+    cmp dl, 7
+    jg bishop_next_dir
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov al, dl
+    xor ah, ah
+    add di, ax
+
+    mov ah, board[di]
+    cmp ah, EMPTY
+    je bishop_step_loop
+
+    mov al, ah
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, bl
+    jne bishop_next_dir
+
+    mov al, ah
+    and al, TYPE_MASK
+    cmp al, BISHOP
+    jne bishop_check_queen
+    jmp attacked_done
+
+bishop_check_queen:
+    cmp al, QUEEN
+    jne bishop_next_dir
+    jmp attacked_done
+
+bishop_next_dir:
+    add si, 2
+    dec cx
+    jz bishop_done
+    jmp bishop_dir_loop
+
+bishop_done:
+    ; knight attacks
+    mov si, offset knight_offsets
+    mov cx, 8
+
+knight_loop:
+    mov dh, row
+    add dh, [si]
+
+    mov dl, col
+    add dl, [si+1]
+
+    cmp dh, 0
+    jl knight_next
+    cmp dh, 7
+    jg knight_next
+
+    cmp dl, 0
+    jl knight_next
+    cmp dl, 7
+    jg knight_next
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov al, dl
+    xor ah, ah
+    add di, ax
+
+    mov ah, board[di]
+    cmp ah, EMPTY
+    je knight_next
+
+    mov al, ah
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, bl
+    jne knight_next
+
+    mov al, ah
+    and al, TYPE_MASK
+    cmp al, KNIGHT
+    jne knight_next
+    jmp attacked_done
+
+knight_next:
+    add si, 2
+    dec cx
+    jz check_pawns
+    jmp knight_loop
+
+check_pawns:
+    ; pawn attacks
+    cmp bl, WHITE
+    jne check_black_pawn_attack
+
+check_white_pawn_attack:
+    mov bh, 1
+    jmp pawn_attack_row_ready
+
+check_black_pawn_attack:
+    mov bh, -1
+
+pawn_attack_row_ready:
+    mov dh, row
+    add dh, bh
+
+    cmp dh, 0
+    jl check_king
+    cmp dh, 7
+    jg check_king
+
+check_pawn_left:
+    mov dl, col
+    dec dl
+
+    cmp dl, 0
+    jl check_pawn_right
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov al, dl
+    xor ah, ah
+    add di, ax
+
+    mov ah, board[di]
+    cmp ah, EMPTY
+    je check_pawn_right
+
+    mov al, ah
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, bl
+    jne check_pawn_right
+
+    mov al, ah
+    and al, TYPE_MASK
+    cmp al, PAWN
+    jne check_pawn_right
+    jmp attacked_done
+
+check_pawn_right:
+    mov dl, col
+    inc dl
+
+    cmp dl, 7
+    jg check_king
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov al, dl
+    xor ah, ah
+    add di, ax
+
+    mov ah, board[di]
+    cmp ah, EMPTY
+    je check_king
+
+    mov al, ah
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, bl
+    jne check_king
+
+    mov al, ah
+    and al, TYPE_MASK
+    cmp al, PAWN
+    jne check_king
+    jmp attacked_done
+
+check_king:
+    mov si, offset king_dirs
+    mov cx, 8
+
+king_loop:
+    mov dh, row
+    add dh, [si]
+
+    mov dl, col
+    add dl, [si+1]
+
+    cmp dh, 0
+    jl king_next
+    cmp dh, 7
+    jg king_next
+
+    cmp dl, 0
+    jl king_next
+    cmp dl, 7
+    jg king_next
+
+    mov al, dh
+    xor ah, ah
+    mov di, ax
+    shl di, 3
+
+    mov al, dl
+    xor ah, ah
+    add di, ax
+
+    mov ah, board[di]
+    cmp ah, EMPTY
+    je king_next
+
+    mov al, ah
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, bl
+    jne king_next
+
+    mov al, ah
+    and al, TYPE_MASK
+    cmp al, KING
+    jne king_next
+    jmp attacked_done
+
+king_next:
+    add si, 2
+    dec cx
+    jz not_attacked
+    jmp king_loop
+
+attacked_done:
+    mov al, 1
+    jmp is_square_attacked_exit
+
+not_attacked:
+    xor al, al
+
+is_square_attacked_exit:
     pop bp
     ret 6
 is_square_attacked ENDP

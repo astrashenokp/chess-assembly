@@ -4,18 +4,23 @@
 INCLUDE shared.inc
 
 .DATA
+    ; Current cursor coordinates
     cursor_row DW 6
     cursor_col DW 4
 
-    is_selected DB 0    
+    is_selected DB 0    ; 0 = no piece selected, 1 = piece selected
     from_row    DW 0
     from_col    DW 0
     promotion_msg DB 'Promote: 1-Q 2-R 3-B 4-N',0
 
     need_redraw DB 1
+    prev_mouse_btn DB 0
 
     EXTRN move_list:BYTE
     EXTRN move_count:WORD
+    
+    EXTRN game_state:BYTE
+    EXTRN check_status:BYTE
 
     ai_mode       DB 0
     ai_color      DB 0
@@ -62,6 +67,7 @@ EXTRN finalize_promotion:PROC
 EXTRN get_legal_moves:PROC
 EXTRN highlight_moves:PROC
 EXTRN draw_status:PROC
+EXTRN update_game_state:PROC
 EXTRN waiting_for_promotion:BYTE
 
 start:
@@ -134,9 +140,13 @@ mm_wait_key:
     mov ah, 00h
     int 16h
     cmp al, '1'
-    je start_1v1
+    jne mm_check_2
+    jmp start_1v1
+mm_check_2:
     cmp al, '2'
-    je menu_color
+    jne mm_ignore
+    jmp menu_color
+mm_ignore:
     jmp mm_wait_key
 
 start_1v1:
@@ -199,7 +209,9 @@ mc_check_2:
     jmp mc_draw
 mc_check_enter:
     cmp al, 0Dh
-    je menu_diff
+    jne mc_ignore_enter
+    jmp menu_diff
+mc_ignore_enter:
     jmp mc_wait_key
 
 menu_diff:
@@ -278,18 +290,30 @@ md_ignore_enter:
     jmp md_wait_key
 
 clear_screen PROC
-    push ax bx cx dx
+    push ax
+    push bx
+    push cx
+    push dx
     mov ax, 0600h
     mov bh, 00h
     mov cx, 0000h
     mov dx, 184Fh
     int 10h
-    pop dx cx bx ax
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 clear_screen ENDP
 
 draw_string PROC
-    push ax bx cx dx di es
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    push es
+    
     mov ax, 0B800h
     mov es, ax
     
@@ -310,7 +334,12 @@ ds_loop:
     add di, 2
     jmp ds_loop
 ds_done:
-    pop es di dx cx bx ax
+    pop es
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    pop ax
     ret
 draw_string ENDP
 
@@ -349,6 +378,29 @@ skip_highlights:
     mov need_redraw, 0
 
 check_input:
+    cmp game_state, 0
+    je check_kbd
+    
+    mov ah, 01h
+    int 16h
+    jz ignore_go_key
+    mov ah, 00h
+    int 16h
+    cmp al, 'r'
+    je restart_game_tr
+    cmp al, 'R'
+    je restart_game_tr
+    cmp ah, 01h
+    je exit_game_tr
+ignore_go_key:
+    jmp game_loop
+
+restart_game_tr:
+    jmp start_game
+exit_game_tr:
+    jmp exit_program
+
+check_kbd:
     mov ah, 01h         
     int 16h
     jnz has_key         
@@ -399,15 +451,16 @@ check_mouse:
     int 33h
 
     test bx, 1          
-    jnz wait_mouse_release  
+    jnz mouse_pressed  
+    
+    mov prev_mouse_btn, 0
     jmp game_loop
 
-wait_mouse_release:
-    mov ax, 0003h
-    int 33h
-    test bx, 1
-    jnz wait_mouse_release
-
+mouse_pressed:
+    cmp prev_mouse_btn, 1
+    je ignore_mouse     
+    mov prev_mouse_btn, 1 
+    
     shr cx, 1
     shr cx, 1
     shr cx, 1           
@@ -535,6 +588,8 @@ do_move:
     call draw_cursor
 
 move_done:
+    call update_game_state
+    mov need_redraw, 1
     mov is_selected, 0
     jmp game_loop
 
@@ -607,7 +662,13 @@ choose_knight:
 handle_promotion ENDP
 
 draw_promotion_prompt PROC
-    push ax bx dx si di es
+    push ax
+    push bx
+    push dx
+    push si
+    push di
+    push es
+    
     mov ax, 0B800h
     mov es, ax
     mov ax, PROMOTION_ROW
@@ -628,12 +689,22 @@ draw_promotion_char:
     add di, 2
     jmp draw_promotion_char
 draw_promotion_done:
-    pop es di si dx bx ax
+    pop es
+    pop di
+    pop si
+    pop dx
+    pop bx
+    pop ax
     ret
 draw_promotion_prompt ENDP
 
 clear_promotion_prompt PROC
-    push ax bx dx di es
+    push ax
+    push bx
+    push dx
+    push di
+    push es
+    
     mov ax, 0B800h
     mov es, ax
     mov ax, PROMOTION_ROW
@@ -650,7 +721,11 @@ clear_promotion_char:
     add di, 2
     dec dx
     jnz clear_promotion_char
-    pop es di dx bx ax
+    pop es
+    pop di
+    pop dx
+    pop bx
+    pop ax
     ret
 clear_promotion_prompt ENDP
 

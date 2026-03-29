@@ -9,15 +9,47 @@ INCLUDE shared.inc
 
     EXTRN captured_by_white:BYTE, captured_by_black:BYTE
     EXTRN cap_w_count:WORD, cap_b_count:WORD
+    
+    EXTRN game_state:BYTE
+    EXTRN check_status:BYTE
 
     ; Table of piece characters
     piece_chars DB ' ', 1, 2, 3, 4, 5, 6
 
-    str_white DB 'TURN: WHITE', 0
-    str_black DB 'TURN: BLACK', 0
-    str_cap_title DB 'CAPTURED:', 0
-    str_cap_w     DB 'by White: ', 0
-    str_cap_b     DB 'by Black: ', 0
+    str_status_title_pvp DB 'Player vs Computer', 0
+    str_turn             DB 'Turn:', 0
+    str_white            DB 'White', 0
+    str_black            DB 'Black', 0
+    
+    str_check_p          DB '** CHECK! **', 0
+    str_black_king_check DB 'Black king is in check', 0
+    str_white_king_check DB 'White king is in check', 0
+    str_captured         DB 'Captured:', 0
+    str_by_white         DB 'by White:', 0
+    str_by_black         DB 'by Black:', 0
+    str_controls         DB 'Controls:', 0
+    str_move_cursor      DB 'Arrows Move cursor', 0
+    str_confirm          DB 'Enter  Select/Confirm', 0
+    str_quit             DB 'Esc    Quit', 0
+    
+    str_banner_chk_w DB 'CHECK! White king must escape check', 0
+    str_banner_chk_b DB 'CHECK! Black king must escape check', 0
+    str_banner_mate_w DB 'CHECKMATE! White wins. Press R for new game, Esc to quit', 0
+    str_banner_mate_b DB 'CHECKMATE! Black wins. Press R for new game, Esc to quit', 0
+    str_banner_stale DB 'STALEMATE! Draw. Press R for new game, Esc to quit', 0
+
+    str_mate_title DB '*** CHECKMATE! ***', 0
+    str_stale_title DB '*** STALEMATE ***', 0
+    str_white_wins DB 'White wins!', 0
+    str_black_wins DB 'Black wins!', 0
+    str_draw DB 'Game is a draw.', 0
+    
+    str_opt_title DB 'Options:', 0
+    str_opt_r DB 'R      New game', 0
+    str_opt_esc DB 'Esc    Quit to DOS', 0
+
+    banner_color DB 0
+    banner_str   DW 0
 
     INCLUDE sprites.inc
 
@@ -25,6 +57,7 @@ INCLUDE shared.inc
 LOCAL_BOARD_LEFT EQU 5 
 LOCAL_BOARD_TOP EQU 2   
 
+; make procs public for main.asm
 PUBLIC init_video_mode
 PUBLIC draw_board
 PUBLIC draw_piece
@@ -457,111 +490,329 @@ draw_status PROC
     push ax
     push bx
     push cx
-    push di
+    push dx
     push si
+    push di
     push es
-
+    
     mov ax, 0B800h
     mov es, ax
+    cld
 
-    cmp current_turn, 0
-    je stat_w
+    mov cx, 3
+clear_pan_r:
+    push cx
+    mov ax, cx
+    mov bx, 160
+    mul bx
+    add ax, 82
+    mov di, ax
+    mov cx, 38
+    mov ax, 0720h
+    rep stosw
+    pop cx
+    inc cx
+    cmp cx, 23
+    jl clear_pan_r
+
+    mov di, 160 * 24
+    mov cx, 80
+    mov ax, 0720h
+    rep stosw
+
+    mov cx, 37
+    mov di, 160 * 2 + 82
+    mov bx, 160 * 23 + 82
+    mov ax, 07CDh
+ds_tb:
+    mov es:[di], ax
+    mov es:[bx], ax
+    add di, 2
+    add bx, 2
+    loop ds_tb
+    
+    mov cx, 3
+ds_lr:
+    push cx
+    mov ax, cx
+    mov bx, 160
+    mul bx
+    add ax, 80
+    mov di, ax
+    mov ax, 07BAh
+    mov es:[di], ax
+    mov es:[di+76], ax
+    pop cx
+    inc cx
+    cmp cx, 23
+    jl ds_lr
+    
+    mov word ptr es:[160*2+80], 07C9h
+    mov word ptr es:[160*2+156], 07BBh
+    mov word ptr es:[160*23+80], 07C8h
+    mov word ptr es:[160*23+156], 07BCh
+    
+    mov di, 160 * 2 + 84
+    mov si, offset str_status_title_pvp
+    call draw_status_string_white
+    
+    cmp byte ptr game_state, 0
+    jne ui_game_over
+    jmp draw_active
+ui_game_over:
+
+    cmp byte ptr game_state, 1
+    jne chk_mate_b
+    jmp draw_mate_w
+chk_mate_b:
+
+    cmp byte ptr game_state, 2
+    jne ui_stale
+    jmp draw_mate_b
+ui_stale:
+
+    mov di, 160 * 6 + 88
+    mov si, offset str_stale_title
+    call draw_status_string_yellow
+    mov di, 160 * 8 + 88
+    mov si, offset str_draw
+    call draw_status_string_white
+    mov byte ptr banner_color, 6Fh
+    mov word ptr banner_str, offset str_banner_stale
+    jmp ds_go_opts
+
+draw_mate_w:
+    mov di, 160 * 6 + 88
+    mov si, offset str_mate_title
+    call draw_status_string_yellow
+    mov di, 160 * 8 + 88
+    mov si, offset str_white_wins
+    call draw_status_string_green
+    mov byte ptr banner_color, 2Fh
+    mov word ptr banner_str, offset str_banner_mate_w
+    jmp ds_go_opts
+
+draw_mate_b:
+    mov di, 160 * 6 + 88
+    mov si, offset str_mate_title
+    call draw_status_string_yellow
+    mov di, 160 * 8 + 88
+    mov si, offset str_black_wins
+    call draw_status_string_green
+    mov byte ptr banner_color, 4Fh
+    mov word ptr banner_str, offset str_banner_mate_b
+
+ds_go_opts:
+    mov di, 160 * 14 + 84
+    mov si, offset str_opt_title
+    call draw_status_string_yellow
+    mov di, 160 * 15 + 84
+    mov si, offset str_opt_r
+    call draw_status_string_cyan
+    mov di, 160 * 16 + 84
+    mov si, offset str_opt_esc
+    call draw_status_string_cyan
+    jmp ds_draw_banner
+
+draw_active:
+    mov di, 160 * 4 + 84
+    mov si, offset str_turn
+    call draw_status_string
+    mov di, 160 * 4 + 96
+    
+    cmp byte ptr current_turn, 0
+    jne t_black
+    jmp dw_w
+t_black:
     mov si, offset str_black
-    jmp stat_draw
-stat_w:
+    jmp dw_t
+dw_w:
     mov si, offset str_white
-stat_draw:
-    mov di, 160 * 4 + 100 
-    mov ah, 07h
-stat_loop1:
-    mov al, [si]
-    cmp al, 0
-    je stat_cap
-    mov es:[di], ax
-    add di, 2
-    inc si
-    jmp stat_loop1
+dw_t:
+    call draw_status_string_white
 
-stat_cap:
-    mov si, offset str_cap_title
-    mov di, 160 * 6 + 100 
-stat_loop2:
-    mov al, [si]
-    cmp al, 0
-    je stat_cap_w
-    mov es:[di], ax
-    add di, 2
-    inc si
-    jmp stat_loop2
+    cmp byte ptr check_status, 0
+    jne do_chk
+    jmp ds_cap
+do_chk:
 
-stat_cap_w:
-    mov si, offset str_cap_w
-    mov di, 160 * 8 + 100
-stat_loop3:
-    mov al, [si]
-    cmp al, 0
-    je stat_cw_pieces
-    mov es:[di], ax
-    add di, 2
-    inc si
-    jmp stat_loop3
+    mov di, 160 * 6 + 88
+    mov si, offset str_check_p
+    call draw_status_string_red
+    mov di, 160 * 7 + 88
+    
+    cmp byte ptr check_status, 1
+    jne do_chk_b
+    jmp ds_chk_w
+do_chk_b:
+    mov si, offset str_black_king_check
+    call draw_status_string_red
+    mov byte ptr banner_color, 4Fh
+    mov word ptr banner_str, offset str_banner_chk_b
+    jmp ds_cap_cont
+ds_chk_w:
+    mov si, offset str_white_king_check
+    call draw_status_string_red
+    mov byte ptr banner_color, 4Fh
+    mov word ptr banner_str, offset str_banner_chk_w
+    jmp ds_cap_cont
 
-stat_cw_pieces:
-    mov cx, cap_w_count
-    cmp cx, 0
-    je stat_cap_b
+ds_cap:
+    mov word ptr banner_str, 0
+
+ds_cap_cont:
+    mov di, 160 * 9 + 84
+    mov si, offset str_captured
+    call draw_status_string
+    mov di, 160 * 10 + 88
+    mov si, offset str_by_white
+    call draw_status_string
+    mov di, 160 * 11 + 88
+    mov si, offset str_by_black
+    call draw_status_string
+
+    mov di, 160 * 10 + 108
     mov si, offset captured_by_white
-stat_cw_ploop:
+    mov cx, cap_w_count
+    
+    cmp cx, 0
+    jne do_dcw
+    jmp ds_cap_b
+do_dcw:
+dcw_lp:
     mov al, [si]
     and al, TYPE_MASK
     xor bx, bx
     mov bl, al
     mov al, piece_chars[bx]
-    mov ah, 08h     
+    mov ah, 0Ch
     mov es:[di], ax
     add di, 2
     inc si
     dec cx
-    jnz stat_cw_ploop
+    jnz dcw_lp
 
-stat_cap_b:
-    mov si, offset str_cap_b
-    mov di, 160 * 10 + 100
-stat_loop4:
+ds_cap_b:
+    mov di, 160 * 11 + 108
+    mov si, offset captured_by_black
+    mov cx, cap_b_count
+    
+    cmp cx, 0
+    jne do_dcb
+    jmp ds_ctrl
+do_dcb:
+dcb_lp:
+    mov al, [si]
+    and al, TYPE_MASK
+    xor bx, bx
+    mov bl, al
+    mov al, piece_chars[bx]
+    mov ah, 0Fh
+    mov es:[di], ax
+    add di, 2
+    inc si
+    dec cx
+    jnz dcb_lp
+
+ds_ctrl:
+    mov di, 160 * 15 + 84
+    mov si, offset str_controls
+    call draw_status_string_yellow
+    mov di, 160 * 16 + 88
+    mov si, offset str_move_cursor
+    call draw_status_string_cyan
+    mov di, 160 * 17 + 88
+    mov si, offset str_confirm
+    call draw_status_string_cyan
+    mov di, 160 * 18 + 88
+    mov si, offset str_quit
+    call draw_status_string_cyan
+
+    cmp word ptr banner_str, 0
+    jne do_banner
+    jmp ds_end 
+do_banner:
+
+ds_draw_banner:
+    mov si, banner_str
+    mov ah, banner_color
+    mov di, 160 * 24
+    mov cx, 80
+db_bg_lp:
+    mov word ptr es:[di], 0020h
+    mov es:[di+1], ah
+    add di, 2
+    loop db_bg_lp
+
+    mov di, 160 * 24 + 4
+db_txt_lp:
     mov al, [si]
     cmp al, 0
-    je stat_cb_pieces
-    mov es:[di], ax
+    je ds_end
+    mov es:[di], al
+    mov es:[di+1], ah
     add di, 2
     inc si
-    jmp stat_loop4
+    jmp db_txt_lp
 
-stat_cb_pieces:
-    mov cx, cap_b_count
-    cmp cx, 0
-    je stat_end
-    mov si, offset captured_by_black
-stat_cb_ploop:
-    mov al, [si]
-    and al, TYPE_MASK
-    xor bx, bx
-    mov bl, al
-    mov al, piece_chars[bx]
-    mov ah, 0Fh     
-    mov es:[di], ax
-    add di, 2
-    inc si
-    dec cx
-    jnz stat_cb_ploop
-
-stat_end:
+ds_end:
     pop es
-    pop si
     pop di
-    pop cx    
+    pop si
+    pop dx
+    pop cx
     pop bx
     pop ax
     ret
 draw_status ENDP
+
+draw_ss_loop PROC
+ss_loop_start:
+    mov al, [si]
+    cmp al, 0
+    je ss_loop_done
+    mov es:[di], ax
+    add di, 2
+    inc si
+    jmp ss_loop_start
+ss_loop_done:
+    ret
+draw_ss_loop ENDP
+
+draw_status_string PROC
+    mov ah, 07h
+    call draw_ss_loop
+    ret
+draw_status_string ENDP
+
+draw_status_string_white PROC
+    mov ah, 0Fh
+    call draw_ss_loop
+    ret
+draw_status_string_white ENDP
+
+draw_status_string_red PROC
+    mov ah, 0Ch
+    call draw_ss_loop
+    ret
+draw_status_string_red ENDP
+
+draw_status_string_yellow PROC
+    mov ah, 0Eh
+    call draw_ss_loop
+    ret
+draw_status_string_yellow ENDP
+
+draw_status_string_cyan PROC
+    mov ah, 0Bh
+    call draw_ss_loop
+    ret
+draw_status_string_cyan ENDP
+
+draw_status_string_green PROC
+    mov ah, 0Ah
+    call draw_ss_loop
+    ret
+draw_status_string_green ENDP
 
 END

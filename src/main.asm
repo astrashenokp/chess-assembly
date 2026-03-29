@@ -23,11 +23,25 @@ INCLUDE shared.inc
 
     EXTRN move_list:BYTE
     EXTRN move_count:WORD
+    EXTRN board:BYTE
 
+    PUBLIC ai_mode
+    PUBLIC ai_color
+    PUBLIC ai_difficulty
     ai_mode       DB 0
     ai_color      DB 0
     ai_difficulty DB 0
-    PUBLIC ai_difficulty
+
+    ai_buf       DB 1024 DUP(?)
+    ai_cap_idx   DW 256 DUP(?)
+    ai_total     DW 0
+    ai_cap_count DW 0
+    ai_seed      DW 0
+    ai_rng_ready DB 0
+    ai_fr        DB ?
+    ai_fc        DB ?
+    ai_tr        DB ?
+    ai_tc        DB ?
 
     title_msg     DB '=== CHESS ENGINE ===', 0
     
@@ -73,7 +87,6 @@ EXTRN draw_status:PROC
 EXTRN is_in_check:PROC
 EXTRN is_checkmate:PROC
 EXTRN is_stalemate:PROC
-EXTRN ai_turn:PROC
 EXTRN current_turn:BYTE
 EXTRN waiting_for_promotion:BYTE
 
@@ -150,17 +163,17 @@ mm_wait_key:
     int 16h
     cmp al, '1'
     jne mm_check_2
-    jmp near ptr start_1v1
+    jmp start_1v1
 mm_check_2:
     cmp al, '2'
     jne mm_ignore
-    jmp near ptr menu_color
+    jmp menu_color
 mm_ignore:
     jmp mm_wait_key
 
 start_1v1:
     mov ai_mode, 0
-    jmp near ptr start_game
+    jmp start_game
 
 menu_color:
     mov ai_mode, 1
@@ -179,7 +192,7 @@ mc_draw:
     mov dh, 10
     mov dl, 35
     mov bl, 07h
-    cmp ai_color, 0
+    cmp ai_color, 1
     jne mc_draw_w
     mov bl, 0Ah
 mc_draw_w:
@@ -189,7 +202,7 @@ mc_draw_w:
     mov dh, 12
     mov dl, 35
     mov bl, 07h
-    cmp ai_color, 1
+    cmp ai_color, 0
     jne mc_draw_b
     mov bl, 0Ah
 mc_draw_b:
@@ -209,12 +222,12 @@ mc_wait_key:
     int 16h
     cmp al, '1'
     jne mc_check_2
-    mov ai_color, 0
+    mov ai_color, 1
     jmp mc_draw
 mc_check_2:
     cmp al, '2'
     jne mc_check_enter
-    mov ai_color, 1
+    mov ai_color, 0
     jmp mc_draw
 mc_check_enter:
     cmp al, 0Dh
@@ -223,7 +236,7 @@ mc_check_enter:
     je go_menu_diff
     jmp mc_wait_key
 go_menu_diff:
-    jmp near ptr menu_diff
+    jmp menu_diff
 
 menu_diff:
 md_draw:
@@ -300,7 +313,11 @@ md_check_enter:
     je go_start_game
     jmp md_wait_key
 go_start_game:
-    jmp near ptr start_game
+    jmp start_game
+
+    ; --- safety barrier: should never reach here ---
+    mov ah, 4Ch
+    int 21h
 
 clear_screen PROC
     push ax
@@ -364,6 +381,16 @@ start_game:
     int 33h
     mov need_redraw, 1
 
+    ; очищення буферу клавіатури
+flush_kbd:
+    mov ah, 01h
+    int 16h
+    jz flush_done
+    mov ah, 00h
+    int 16h
+    jmp flush_kbd
+flush_done:
+
 game_loop:
     cmp need_redraw, 1
     jne check_ai_turn     
@@ -401,7 +428,7 @@ check_ai_turn:
     cmp al, ai_color
     je check_input
 
-    call ai_turn
+    call inline_ai_easy
     call update_game_state
     mov is_selected, 0
     mov need_redraw, 1
@@ -796,6 +823,180 @@ clear_promotion_char:
     pop ax
     ret
 clear_promotion_prompt ENDP
+
+inline_ai_easy PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+
+    mov ai_total, 0
+    mov dh, 0
+
+iai_row_loop:
+    cmp dh, 8
+    jl  iai_row_ok
+    jmp iai_collect_done
+iai_row_ok:
+    mov dl, 0
+
+iai_col_loop:
+    cmp dl, 8
+    jl  iai_col_ok
+    jmp iai_next_row
+iai_col_ok:
+    xor bx, bx
+    mov bl, dh
+    shl bl, 3
+    add bl, dl
+    mov al, board[bx]
+    cmp al, 0
+    je  iai_next_col
+    mov ah, al
+    and ah, COLOR_MASK
+    shr ah, 3
+    cmp ah, current_turn
+    jne iai_next_col
+    push dx
+    xor ax, ax
+    mov al, dl
+    push ax
+    xor ax, ax
+    mov al, dh
+    push ax
+    call get_legal_moves
+    pop dx
+    mov cx, move_count
+    cmp cx, 0
+    je  iai_next_col
+    mov di, ai_total
+    shl di, 2
+    add di, offset ai_buf
+    mov si, offset move_list
+iai_copy:
+    mov al, [si]
+    mov [di], al
+    mov al, [si+1]
+    mov [di+1], al
+    mov al, [si+2]
+    mov [di+2], al
+    mov al, [si+3]
+    mov [di+3], al
+    add si, 4
+    add di, 4
+    inc ai_total
+    loop iai_copy
+iai_next_col:
+    inc dl
+    jmp iai_col_loop
+iai_next_row:
+    inc dh
+    jmp iai_row_loop
+
+iai_collect_done:
+    cmp ai_total, 0
+    jne iai_scan_start
+    jmp iai_done
+iai_scan_start:
+    mov cx, ai_total
+    xor dx, dx
+    mov si, offset ai_buf
+    mov ai_cap_count, 0
+iai_scan:
+    xor bx, bx
+    mov bl, [si+2]
+    shl bl, 3
+    add bl, [si+3]
+    mov al, board[bx]
+    cmp al, 0
+    je  iai_no_cap
+    mov di, ai_cap_count
+    shl di, 1
+    add di, offset ai_cap_idx
+    mov [di], dx
+    inc ai_cap_count
+iai_no_cap:
+    add si, 4
+    inc dx
+    dec cx
+    jnz iai_scan
+
+    cmp ai_cap_count, 0
+    jne iai_pick_cap
+    mov bx, ai_total
+    call iai_rand
+    mov bx, ax
+    jmp iai_load
+iai_pick_cap:
+    mov bx, ai_cap_count
+    call iai_rand
+    shl ax, 1
+    mov si, offset ai_cap_idx
+    add si, ax
+    mov bx, [si]
+iai_load:
+    mov si, bx
+    shl si, 2
+    add si, offset ai_buf
+    mov al, [si]
+    mov ai_fr, al
+    mov al, [si+1]
+    mov ai_fc, al
+    mov al, [si+2]
+    mov ai_tr, al
+    mov al, [si+3]
+    mov ai_tc, al
+    xor ax, ax
+    mov al, ai_tc
+    push ax
+    xor ax, ax
+    mov al, ai_tr
+    push ax
+    xor ax, ax
+    mov al, ai_fc
+    push ax
+    xor ax, ax
+    mov al, ai_fr
+    push ax
+    call execute_move
+    cmp waiting_for_promotion, 0
+    je  iai_done
+    push 5
+    call finalize_promotion
+iai_done:
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+inline_ai_easy ENDP
+
+iai_rand PROC
+    push dx
+    push cx
+    cmp ai_rng_ready, 1
+    je  iai_rand_go
+    mov ah, 00h
+    int 1Ah
+    mov ai_seed, dx
+    mov ai_rng_ready, 1
+iai_rand_go:
+    mov ax, ai_seed
+    mov cx, 25173
+    mul cx
+    add ax, 13849
+    mov ai_seed, ax
+    xor dx, dx
+    div bx
+    mov ax, dx
+    pop cx
+    pop dx
+    ret
+iai_rand ENDP
 
 exit_program:
     mov ax, 0003h

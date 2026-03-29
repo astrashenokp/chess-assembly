@@ -12,11 +12,13 @@ INCLUDE shared.inc
     
     EXTRN game_state:BYTE
     EXTRN check_status:BYTE
+    EXTRN ai_mode:BYTE
 
     ; Table of piece characters
     piece_chars DB ' ', 1, 2, 3, 4, 5, 6
 
-    str_status_title_pvp DB 'Player vs Computer', 0
+    str_status_title_pvp DB 'Player vs Player  ', 0
+    str_status_title_ai  DB 'Player vs AI      ', 0
     str_turn             DB 'Turn:', 0
     str_white            DB 'White', 0
     str_black            DB 'Black', 0
@@ -553,7 +555,13 @@ ds_lr:
     mov word ptr es:[160*23+156], 07BCh
     
     mov di, 160 * 2 + 84
+    cmp byte ptr ai_mode, 1
+    jne dsp_title_is_pvp
+    mov si, offset str_status_title_ai
+    jmp dsp_title_do_draw
+dsp_title_is_pvp:
     mov si, offset str_status_title_pvp
+dsp_title_do_draw:
     call draw_status_string_white
     
     cmp byte ptr game_state, 0

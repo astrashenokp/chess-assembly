@@ -80,7 +80,7 @@ king_dirs DB -1,-1
         DB 1,1
 
 ; Pieces
-EMPTY    EQU 0
+EMPTY  EQU 0
 PAWN   EQU 1
 KNIGHT EQU 2
 BISHOP EQU 3
@@ -110,6 +110,7 @@ PUBLIC finalize_promotion
 PUBLIC is_in_check
 PUBLIC is_square_attacked
 PUBLIC is_checkmate
+PUBLIC is_stalemate
 
 
 ; init_board
@@ -1828,6 +1829,95 @@ is_square_attacked_exit:
     ret 6
 is_square_attacked ENDP
 
+
+has_any_legal_move PROC
+    push bp
+    mov bp, sp
+    push bx
+    push dx
+    push si
+
+color EQU [bp+4]
+
+    mov bl, current_turn
+    mov bh, color
+    mov current_turn, bh
+
+    xor dh, dh
+
+scan_row_loop:
+    cmp dh, 8
+    je no_legal_moves
+
+    xor dl, dl
+
+scan_col_loop:
+    cmp dl, 8
+    je next_scan_row
+
+    mov al, dh
+    xor ah, ah
+    mov si, ax
+    shl si, 3
+
+    mov al, dl
+    xor ah, ah
+    add si, ax
+
+    mov al, board[si]
+    cmp al, EMPTY
+    je next_scan_col
+
+    mov ah, al
+    and ah, COLOR_MASK
+    shr ah, 3
+    cmp ah, bh
+    jne next_scan_col
+
+    push bx
+    push dx
+
+    xor ax, ax
+    mov al, dl
+    push ax
+
+    xor ax, ax
+    mov al, dh
+    push ax
+    call get_legal_moves
+
+    pop dx
+    pop bx
+
+    mov ax, move_count
+    cmp ax, 0
+    jne legal_move_found
+
+next_scan_col:
+    inc dl
+    jmp scan_col_loop
+
+next_scan_row:
+    inc dh
+    jmp scan_row_loop
+
+legal_move_found:
+    mov current_turn, bl
+    mov al, 1
+    jmp has_any_legal_move_done
+
+no_legal_moves:
+    mov current_turn, bl
+    xor al, al
+
+has_any_legal_move_done:
+    pop si
+    pop dx
+    pop bx
+    pop bp
+    ret 2
+has_any_legal_move ENDP
+
 ; is_checkmate
 ; input: [bp+4] = color
 ; output: AL = 1 if in checkmate
@@ -1837,8 +1927,72 @@ is_checkmate PROC
 
 color EQU [bp+4]
 
+    xor ax, ax
+    mov al, color
+    push ax
+    call has_any_legal_move
+    cmp al, 0
+    je check_if_in_check
+    jmp not_checkmate
+
+check_if_in_check:
+    xor ax, ax
+    mov al, color
+    push ax
+    call is_in_check
+    cmp al, 1
+    je yes_checkmate
+    jmp not_checkmate
+
+yes_checkmate:
+    mov al, 1
+    jmp is_checkmate_done
+
+not_checkmate:
+    xor al, al
+
+is_checkmate_done:
     pop bp
     ret 2
 is_checkmate ENDP
+
+
+; is_stalemate
+; input: [bp+4] = color
+; output: AL = 1 if in stalemate
+is_stalemate PROC
+    push bp
+    mov bp, sp
+
+color EQU [bp+4]
+
+    xor ax, ax
+    mov al, color
+    push ax
+    call has_any_legal_move
+    cmp al, 0
+    je check_if_not_in_check
+    jmp not_stalemate
+
+check_if_not_in_check:
+    xor ax, ax
+    mov al, color
+    push ax
+    call is_in_check
+    cmp al, 0
+    je yes_stalemate
+    jmp not_stalemate
+
+yes_stalemate:
+    mov al, 1
+    jmp is_stalemate_done
+
+not_stalemate:
+    xor al, al
+
+is_stalemate_done:
+    pop bp
+    ret 2
+is_stalemate ENDP
 
 END

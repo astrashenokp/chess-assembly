@@ -19,8 +19,10 @@ INCLUDE shared.inc
     EXTRN move_list:BYTE
     EXTRN move_count:WORD
     
-    EXTRN game_state:BYTE
-    EXTRN check_status:BYTE
+    PUBLIC game_state
+    PUBLIC check_status
+    game_state    DB 0
+    check_status  DB 0
 
     ai_mode       DB 0
     ai_color      DB 0
@@ -68,10 +70,15 @@ EXTRN finalize_promotion:PROC
 EXTRN get_legal_moves:PROC
 EXTRN highlight_moves:PROC
 EXTRN draw_status:PROC
-EXTRN update_game_state:PROC
+
+EXTRN is_in_check:PROC
+EXTRN is_checkmate:PROC
+EXTRN is_stalemate:PROC
 EXTRN waiting_for_promotion:BYTE
 EXTRN ai_turn:PROC
 EXTRN current_turn:BYTE
+
+PUBLIC update_game_state
 
 start:
     mov ax, @data
@@ -356,31 +363,34 @@ start_game:
 
 game_loop:
     cmp need_redraw, 1
-    jne check_input     
+    jne check_ai_turn     
 
-    mov ax, 0002h
+    mov ax, 0002h       
     int 33h
 
-    call draw_board
-    call draw_status      
+    call draw_board     
+    call draw_status    
     
     cmp is_selected, 1
     jne skip_highlights
-    call highlight_moves  
+    call highlight_moves 
 
 skip_highlights:
     mov ax, cursor_row
     mov ch, al
     mov ax, cursor_col
     mov cl, al
-    call draw_cursor
+    call draw_cursor    
 
-    mov ax, 0001h
+    mov ax, 0001h       
     int 33h
 
     mov need_redraw, 0
 
 check_ai_turn:
+    cmp game_state, 0
+    jne check_input
+
     cmp ai_mode, 1
     jne check_input
 
@@ -389,6 +399,7 @@ check_ai_turn:
     je check_input
 
     call ai_turn
+    call update_game_state
     mov is_selected, 0
     mov need_redraw, 1
     jmp game_loop
@@ -583,7 +594,8 @@ do_move:
     cmp waiting_for_promotion, 0
     je move_done
 
-    mov need_redraw, 1
+    mov ax, 0002h
+    int 33h
     call draw_board
     mov ax, cursor_row
     mov ch, al
@@ -594,14 +606,8 @@ do_move:
     call handle_promotion
     call clear_promotion_prompt
 
-    mov need_redraw, 1
-    call draw_board
-    
-    mov ax, cursor_row
-    mov ch, al
-    mov ax, cursor_col
-    mov cl, al
-    call draw_cursor
+    mov ax, 0001h
+    int 33h
 
 move_done:
     call update_game_state
@@ -629,9 +635,52 @@ cancel_selection:
     mov is_selected, 0
     jmp game_loop
 
+update_game_state PROC
+    push ax
+    xor ax, ax
+    mov al, current_turn
+    push ax
+    call is_checkmate
+    cmp al, 1
+    jne ugs_stalemate
+    mov al, current_turn
+    xor al, 1
+    inc al
+    mov game_state, al
+    jmp ugs_check_status
+ugs_stalemate:
+    xor ax, ax
+    mov al, current_turn
+    push ax
+    call is_stalemate
+    cmp al, 1
+    jne ugs_active
+    mov game_state, 3
+    jmp ugs_check_status
+ugs_active:
+    mov game_state, 0
+ugs_check_status:
+    push 0
+    call is_in_check
+    cmp al, 1
+    jne ugs_chk_b
+    mov check_status, 1
+    jmp ugs_done
+ugs_chk_b:
+    push 1
+    call is_in_check
+    cmp al, 1
+    jne ugs_no_chk
+    mov check_status, 2
+    jmp ugs_done
+ugs_no_chk:
+    mov check_status, 0
+ugs_done:
+    pop ax
+    ret
+update_game_state ENDP
+
 handle_promotion PROC
-    mov ax, 0002h
-    int 33h
     call draw_promotion_prompt
 
 promotion_key_loop:
@@ -651,29 +700,21 @@ promotion_key_loop:
 choose_queen:
     push PROMOTE_QUEEN
     call finalize_promotion
-    mov ax, 0001h
-    int 33h
     ret
 
 choose_rook:
     push PROMOTE_ROOK
     call finalize_promotion
-    mov ax, 0001h
-    int 33h
     ret
 
 choose_bishop:
     push PROMOTE_BISHOP
     call finalize_promotion
-    mov ax, 0001h
-    int 33h
     ret
 
 choose_knight:
     push PROMOTE_KNIGHT
     call finalize_promotion
-    mov ax, 0001h
-    int 33h
     ret
 handle_promotion ENDP
 

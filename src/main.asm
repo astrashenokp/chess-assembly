@@ -25,6 +25,7 @@ INCLUDE shared.inc
     ai_mode       DB 0
     ai_color      DB 0
     ai_difficulty DB 0
+    PUBLIC ai_difficulty
 
     title_msg     DB '=== CHESS ENGINE ===', 0
     
@@ -69,6 +70,8 @@ EXTRN highlight_moves:PROC
 EXTRN draw_status:PROC
 EXTRN update_game_state:PROC
 EXTRN waiting_for_promotion:BYTE
+EXTRN ai_turn:PROC
+EXTRN current_turn:BYTE
 
 start:
     mov ax, @data
@@ -285,7 +288,7 @@ md_check_3:
 md_check_enter:
     cmp al, 0Dh
     jne md_ignore_enter
-    jmp main_menu
+    jmp start_game
 md_ignore_enter:
     jmp md_wait_key
 
@@ -376,6 +379,19 @@ skip_highlights:
     int 33h
 
     mov need_redraw, 0
+
+check_ai_turn:
+    cmp ai_mode, 1
+    jne check_input
+
+    mov al, current_turn
+    cmp al, ai_color
+    je check_input
+
+    call ai_turn
+    mov is_selected, 0
+    mov need_redraw, 1
+    jmp game_loop
 
 check_input:
     cmp game_state, 0

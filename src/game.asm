@@ -19,6 +19,10 @@ current_turn    DB 0      ; 0 = white, 1 = black
 selected_color DB 0       ; color of the selected piece
 PUBLIC waiting_for_promotion
 waiting_for_promotion DB 0
+PUBLIC last_move_was_capture, last_captured_piece, last_mover_color
+last_move_was_capture DB 0
+last_captured_piece   DB 0
+last_mover_color      DB 0
 en_passant_available DB 0
 en_passant_row DB ?
 en_passant_col DB ?
@@ -111,6 +115,7 @@ PUBLIC is_in_check
 PUBLIC is_square_attacked
 PUBLIC is_checkmate
 PUBLIC is_stalemate
+PUBLIC get_move_capture_info
 
 
 ; init_board
@@ -130,6 +135,9 @@ copy_loop:
 
     mov current_turn, 0
     mov waiting_for_promotion, 0
+    mov last_move_was_capture, 0
+    mov last_captured_piece, 0
+    mov last_mover_color, 0
     mov en_passant_available, 0
     mov white_king_pos, 60
     mov black_king_pos, 4
@@ -906,6 +914,13 @@ to_col   EQU [bp+10]
     ; piece = board[from]
     mov bl, board[si]
 
+    mov al, bl
+    and al, COLOR_MASK
+    shr al, 3
+    mov last_mover_color, al
+    mov last_move_was_capture, 0
+    mov last_captured_piece, 0
+
     ; to_index = to_row*8 + to_col
     mov al, to_row
     shl al, 3
@@ -920,6 +935,8 @@ to_col   EQU [bp+10]
     mov ah, board[di]
     cmp ah, EMPTY
     je skip_rec
+    mov last_move_was_capture, 1
+    mov last_captured_piece, ah
     call record_capture
 
 skip_rec:
@@ -987,6 +1004,8 @@ do_en_passant_capture:
     push di
     mov di, ax
     mov ah, board[di] 
+    mov last_move_was_capture, 1
+    mov last_captured_piece, ah
     call record_capture
     mov board[di], 0
     pop di
@@ -1994,5 +2013,104 @@ is_stalemate_done:
     pop bp
     ret 2
 is_stalemate ENDP
+
+
+; get_move_capture_info
+; input:  from_row, from_col, to_row, to_col
+; output: AL = 1 if capture, 0 if not
+;         AH = captured piece byte, or 0 if no capture
+get_move_capture_info PROC
+    push bp
+    mov bp, sp
+    push bx
+    push dx
+    push si
+    push di
+
+from_row EQU [bp+4]
+from_col EQU [bp+6]
+to_row   EQU [bp+8]
+to_col   EQU [bp+10]
+
+    ; from index
+    mov al, from_row
+    shl al, 3
+    add al, from_col
+    xor ah, ah
+    mov si, ax
+
+    ; moving piece
+    mov bl, board[si]
+
+    ; to index
+    mov al, to_row
+    shl al, 3
+    add al, to_col
+    xor ah, ah
+    mov di, ax
+
+    ; if capture: al = 1
+    mov dl, board[di]
+    cmp dl, EMPTY
+    je gmci_check_en_passant
+
+    mov al, bl
+    and al, COLOR_MASK
+    mov ah, dl
+    and ah, COLOR_MASK
+    cmp al, ah
+    je gmci_no_capture
+
+    mov ah, dl
+    mov al, 1
+    jmp gmci_done
+
+gmci_check_en_passant:
+    ; en passant: destination is empty, but captured pawn is behind it
+    mov al, bl
+    and al, TYPE_MASK
+    cmp al, PAWN
+    jne gmci_no_capture
+
+    mov al, from_col
+    cmp al, to_col
+    je gmci_no_capture
+
+    cmp en_passant_available, 1
+    jne gmci_no_capture
+
+    mov al, to_row
+    cmp al, en_passant_row
+    jne gmci_no_capture
+
+    mov al, to_col
+    cmp al, en_passant_col
+    jne gmci_no_capture
+
+    mov al, en_passant_capture_row
+    shl al, 3
+    add al, en_passant_capture_col
+    xor ah, ah
+    mov bx, ax
+
+    mov dl, board[bx]
+    cmp dl, EMPTY
+    je gmci_no_capture
+
+    mov ah, dl
+    mov al, 1
+    jmp gmci_done
+
+gmci_no_capture:
+    xor ax, ax
+
+gmci_done:
+    pop di
+    pop si
+    pop dx
+    pop bx
+    pop bp
+    ret 8
+get_move_capture_info ENDP
 
 END

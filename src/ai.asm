@@ -29,6 +29,7 @@ PUBLIC ai_turn
 EXTRN get_legal_moves:PROC
 EXTRN execute_move:PROC
 EXTRN finalize_promotion:PROC
+EXTRN get_move_capture_info:PROC
 
 ai_turn PROC
     call collect_all_legal_moves
@@ -197,26 +198,23 @@ random_range ENDP
 
 is_move_capture PROC
     ; SI points to one move in ai_move_buffer
-    push bx
+    xor ax, ax
+    mov al, [si+3]
+    push ax
 
+    xor ax, ax
     mov al, [si+2]
-    shl al, 3
-    add al, [si+3]
+    push ax
 
-    xor ah, ah
-    mov bx, ax
+    xor ax, ax
+    mov al, [si+1]
+    push ax
 
-    mov al, board[bx]
-    cmp al, EMPTY
-    jne move_is_capture
+    xor ax, ax
+    mov al, [si]
+    push ax
 
-    xor al, al
-    pop bx
-    ret
-
-move_is_capture:
-    mov al, 1
-    pop bx
+    call get_move_capture_info
     ret
 is_move_capture ENDP
 

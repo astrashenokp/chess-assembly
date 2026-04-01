@@ -82,6 +82,7 @@ EXTRN init_board:PROC
 EXTRN execute_move:PROC
 EXTRN finalize_promotion:PROC
 EXTRN get_legal_moves:PROC
+EXTRN ai_turn:PROC
 EXTRN highlight_moves:PROC
 EXTRN draw_status:PROC
 EXTRN is_in_check:PROC
@@ -428,7 +429,7 @@ check_ai_turn:
     cmp al, ai_color
     je check_input
 
-    call inline_ai_easy
+    call ai_turn
     call update_game_state
     mov is_selected, 0
     mov need_redraw, 1

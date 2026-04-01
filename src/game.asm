@@ -116,6 +116,8 @@ PUBLIC is_square_attacked
 PUBLIC is_checkmate
 PUBLIC is_stalemate
 PUBLIC get_move_capture_info
+PUBLIC make_test_move 
+PUBLIC undo_test_move
 
 
 ; init_board

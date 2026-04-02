@@ -378,6 +378,12 @@ start_game:
     call clear_screen
     call init_board
     call init_video_mode
+
+    mov game_state, 0
+    mov check_status, 0 
+    mov is_selected, 0 
+    mov prev_mouse_btn, 0
+    
     mov ax, 0001h
     int 33h
     mov need_redraw, 1

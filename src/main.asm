@@ -4,11 +4,11 @@
 INCLUDE shared.inc
 
 .DATA
-    PUBLIC game_state
-    PUBLIC check_status
+    PUBLIC game_state, check_status
     game_state    DB 0
     check_status  DB 0
 
+    PUBLIC cursor_row, cursor_col, is_selected, from_row, from_col, need_redraw, prev_mouse_btn
     ; Current cursor coordinates
     cursor_row DW 6
     cursor_col DW 4
@@ -25,23 +25,10 @@ INCLUDE shared.inc
     EXTRN move_count:WORD
     EXTRN board:BYTE
 
-    PUBLIC ai_mode
-    PUBLIC ai_color
-    PUBLIC ai_difficulty
+    PUBLIC ai_mode, ai_color, ai_difficulty
     ai_mode       DB 0
     ai_color      DB 0
     ai_difficulty DB 0
-
-    ai_buf       DB 1024 DUP(?)
-    ai_cap_idx   DW 256 DUP(?)
-    ai_total     DW 0
-    ai_cap_count DW 0
-    ai_seed      DW 0
-    ai_rng_ready DB 0
-    ai_fr        DB ?
-    ai_fc        DB ?
-    ai_tr        DB ?
-    ai_tc        DB ?
 
     title_msg     DB '=== CHESS ENGINE ===', 0
     
@@ -91,7 +78,8 @@ EXTRN is_stalemate:PROC
 EXTRN current_turn:BYTE
 EXTRN waiting_for_promotion:BYTE
 
-PUBLIC update_game_state
+EXTRN handle_input:PROC
+PUBLIC update_game_state, handle_promotion, clear_promotion_prompt
 
 start:
     mov ax, @data
@@ -316,10 +304,6 @@ md_check_enter:
 go_start_game:
     jmp start_game
 
-    ; --- safety barrier: should never reach here ---
-    mov ah, 4Ch
-    int 21h
-
 clear_screen PROC
     push ax
     push bx
@@ -388,7 +372,6 @@ start_game:
     int 33h
     mov need_redraw, 1
 
-    ; очищення буферу клавіатури
 flush_kbd:
     mov ah, 01h
     int 16h
@@ -442,229 +425,19 @@ check_ai_turn:
     jmp game_loop
 
 check_input:
-    cmp game_state, 0
-    je check_kbd
+    call handle_input
     
-    mov ah, 01h
-    int 16h
-    jz ignore_go_key
-    mov ah, 00h
-    int 16h
-    cmp al, 'r'
+    cmp al, 1
     je restart_game_tr
-    cmp al, 'R'
-    je restart_game_tr
-    cmp ah, 01h
+    cmp al, 2
     je exit_game_tr
-ignore_go_key:
     jmp game_loop
 
 restart_game_tr:
     jmp start_game
+
 exit_game_tr:
     jmp exit_program
-
-check_kbd:
-    mov ah, 01h         
-    int 16h
-    jnz has_key         
-    jmp check_mouse
-
-has_key:
-    mov ah, 00h
-    int 16h
-    
-    mov need_redraw, 1  
-
-    cmp ah, 48h     
-    jne not_up
-    jmp move_up
-not_up:
-    cmp ah, 50h     
-    jne not_down
-    jmp move_down
-not_down:
-    cmp ah, 4Bh    
-    jne not_left
-    jmp move_left
-not_left:
-    cmp ah, 4Dh     
-    jne not_right
-    jmp move_right
-not_right:
-    cmp al, 0Dh     
-    jne not_enter
-    jmp select_cell
-not_enter:
-    cmp ah, 01h     
-    jne ignore_key
-    
-    cmp is_selected, 1
-    je esc_cancel_selection
-    jmp exit_program
-
-esc_cancel_selection:
-    mov is_selected, 0
-    jmp game_loop
-
-ignore_key:
-    jmp game_loop   
-
-check_mouse:
-    mov ax, 0003h       
-    int 33h
-
-    test bx, 1          
-    jnz mouse_pressed  
-    
-    mov prev_mouse_btn, 0
-    jmp game_loop
-
-mouse_pressed:
-    cmp prev_mouse_btn, 1
-    je ignore_mouse     
-    mov prev_mouse_btn, 1 
-    
-    shr cx, 1
-    shr cx, 1
-    shr cx, 1           
-
-    shr dx, 1
-    shr dx, 1
-    shr dx, 1           
-
-    sub dx, 2
-    jl ignore_mouse
-    shr dx, 1
-    cmp dx, 7
-    jg ignore_mouse
-
-    sub cx, 5
-    jl ignore_mouse
-    shr cx, 1
-    shr cx, 1
-    cmp cx, 7
-    jg ignore_mouse
-
-    mov cursor_row, dx
-    mov cursor_col, cx
-    mov need_redraw, 1  
-    jmp select_cell     
-
-ignore_mouse:
-    jmp game_loop
-
-move_up:
-    cmp cursor_row, 0
-    je end_move_up
-    dec cursor_row
-end_move_up:
-    jmp game_loop
-
-move_down:
-    cmp cursor_row, 7
-    je end_move_down
-    inc cursor_row
-end_move_down:
-    jmp game_loop
-
-move_left:
-    cmp cursor_col, 0
-    je end_move_left
-    dec cursor_col
-end_move_left:
-    jmp game_loop
-
-move_right:
-    cmp cursor_col, 7
-    je end_move_right
-    inc cursor_col
-end_move_right:
-    jmp game_loop
-
-select_cell:
-    cmp is_selected, 0
-    jne check_same_cell
-    jmp pickup_piece    
-
-check_same_cell:
-    mov ax, cursor_row
-    cmp ax, from_row
-    jne validate_move
-    mov ax, cursor_col
-    cmp ax, from_col
-    jne validate_move
-    
-    mov is_selected, 0  
-    jmp game_loop
-
-validate_move:
-    mov cx, move_count
-    cmp cx, 0
-    je invalid_move
-    mov si, offset move_list
-
-val_loop:
-    mov ax, cursor_row
-    cmp al, [si+2]
-    jne val_next
-    mov ax, cursor_col
-    cmp al, [si+3]
-    je do_move         
-
-val_next:
-    add si, 4
-    dec cx
-    jnz val_loop
-
-invalid_move:
-    mov is_selected, 0
-    jmp game_loop
-
-do_move:
-    push cursor_col     
-    push cursor_row     
-    push from_col       
-    push from_row       
-    call execute_move
-
-    cmp waiting_for_promotion, 0
-    je move_done_label
-
-    mov ax, 0002h
-    int 33h
-    call draw_board
-    call draw_cursor
-    call handle_promotion
-    call clear_promotion_prompt
-    mov ax, 0001h
-    int 33h
-
-move_done_label:
-    call update_game_state
-    mov need_redraw, 1
-    mov is_selected, 0
-    jmp game_loop
-
-pickup_piece:
-    mov ax, cursor_row
-    mov from_row, ax
-    mov ax, cursor_col
-    mov from_col, ax
-    
-    push cursor_col
-    push cursor_row
-    call get_legal_moves
-
-    cmp move_count, 0
-    je cancel_selection
-
-    mov is_selected, 1  
-    jmp game_loop
-
-cancel_selection:
-    mov is_selected, 0
-    jmp game_loop
 
 update_game_state PROC
     push ax
@@ -830,180 +603,6 @@ clear_promotion_char:
     pop ax
     ret
 clear_promotion_prompt ENDP
-
-inline_ai_easy PROC
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-
-    mov ai_total, 0
-    mov dh, 0
-
-iai_row_loop:
-    cmp dh, 8
-    jl  iai_row_ok
-    jmp iai_collect_done
-iai_row_ok:
-    mov dl, 0
-
-iai_col_loop:
-    cmp dl, 8
-    jl  iai_col_ok
-    jmp iai_next_row
-iai_col_ok:
-    xor bx, bx
-    mov bl, dh
-    shl bl, 3
-    add bl, dl
-    mov al, board[bx]
-    cmp al, 0
-    je  iai_next_col
-    mov ah, al
-    and ah, COLOR_MASK
-    shr ah, 3
-    cmp ah, current_turn
-    jne iai_next_col
-    push dx
-    xor ax, ax
-    mov al, dl
-    push ax
-    xor ax, ax
-    mov al, dh
-    push ax
-    call get_legal_moves
-    pop dx
-    mov cx, move_count
-    cmp cx, 0
-    je  iai_next_col
-    mov di, ai_total
-    shl di, 2
-    add di, offset ai_buf
-    mov si, offset move_list
-iai_copy:
-    mov al, [si]
-    mov [di], al
-    mov al, [si+1]
-    mov [di+1], al
-    mov al, [si+2]
-    mov [di+2], al
-    mov al, [si+3]
-    mov [di+3], al
-    add si, 4
-    add di, 4
-    inc ai_total
-    loop iai_copy
-iai_next_col:
-    inc dl
-    jmp iai_col_loop
-iai_next_row:
-    inc dh
-    jmp iai_row_loop
-
-iai_collect_done:
-    cmp ai_total, 0
-    jne iai_scan_start
-    jmp iai_done
-iai_scan_start:
-    mov cx, ai_total
-    xor dx, dx
-    mov si, offset ai_buf
-    mov ai_cap_count, 0
-iai_scan:
-    xor bx, bx
-    mov bl, [si+2]
-    shl bl, 3
-    add bl, [si+3]
-    mov al, board[bx]
-    cmp al, 0
-    je  iai_no_cap
-    mov di, ai_cap_count
-    shl di, 1
-    add di, offset ai_cap_idx
-    mov [di], dx
-    inc ai_cap_count
-iai_no_cap:
-    add si, 4
-    inc dx
-    dec cx
-    jnz iai_scan
-
-    cmp ai_cap_count, 0
-    jne iai_pick_cap
-    mov bx, ai_total
-    call iai_rand
-    mov bx, ax
-    jmp iai_load
-iai_pick_cap:
-    mov bx, ai_cap_count
-    call iai_rand
-    shl ax, 1
-    mov si, offset ai_cap_idx
-    add si, ax
-    mov bx, [si]
-iai_load:
-    mov si, bx
-    shl si, 2
-    add si, offset ai_buf
-    mov al, [si]
-    mov ai_fr, al
-    mov al, [si+1]
-    mov ai_fc, al
-    mov al, [si+2]
-    mov ai_tr, al
-    mov al, [si+3]
-    mov ai_tc, al
-    xor ax, ax
-    mov al, ai_tc
-    push ax
-    xor ax, ax
-    mov al, ai_tr
-    push ax
-    xor ax, ax
-    mov al, ai_fc
-    push ax
-    xor ax, ax
-    mov al, ai_fr
-    push ax
-    call execute_move
-    cmp waiting_for_promotion, 0
-    je  iai_done
-    push 5
-    call finalize_promotion
-iai_done:
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-inline_ai_easy ENDP
-
-iai_rand PROC
-    push dx
-    push cx
-    cmp ai_rng_ready, 1
-    je  iai_rand_go
-    mov ah, 00h
-    int 1Ah
-    mov ai_seed, dx
-    mov ai_rng_ready, 1
-iai_rand_go:
-    mov ax, ai_seed
-    mov cx, 25173
-    mul cx
-    add ax, 13849
-    mov ai_seed, ax
-    xor dx, dx
-    div bx
-    mov ax, dx
-    pop cx
-    pop dx
-    ret
-iai_rand ENDP
 
 exit_program:
     mov ax, 0003h

@@ -181,7 +181,7 @@ mc_draw:
     mov dh, 10
     mov dl, 35
     mov bl, 07h
-    cmp ai_color, 1
+    cmp ai_color, 0
     jne mc_draw_w
     mov bl, 0Ah
 mc_draw_w:
@@ -191,7 +191,7 @@ mc_draw_w:
     mov dh, 12
     mov dl, 35
     mov bl, 07h
-    cmp ai_color, 0
+    cmp ai_color, 1
     jne mc_draw_b
     mov bl, 0Ah
 mc_draw_b:
@@ -211,12 +211,12 @@ mc_wait_key:
     int 16h
     cmp al, '1'
     jne mc_check_2
-    mov ai_color, 1
+    mov ai_color, 0
     jmp mc_draw
 mc_check_2:
     cmp al, '2'
     jne mc_check_enter
-    mov ai_color, 0
+    mov ai_color, 1
     jmp mc_draw
 mc_check_enter:
     cmp al, 0Dh

@@ -50,6 +50,8 @@ EXTRN undo_test_move:PROC
 EXTRN is_in_check:PROC
 EXTRN is_square_attacked:PROC
 
+; ai_turn
+; main AI entry point that chooses and executes a move by difficulty
 ai_turn PROC
     call collect_all_legal_moves
 
@@ -90,6 +92,8 @@ ai_done:
 ai_turn ENDP
 
 
+; choose_hard_move
+; hard level of AI logic
 choose_hard_move PROC
     push ax
     push bx
@@ -230,6 +234,9 @@ hard_pick:
     ret
 choose_hard_move ENDP
 
+
+; choose_medium_move
+; medium level of AI logic
 choose_medium_move PROC
     push ax
     push bx
@@ -307,6 +314,9 @@ medium_pick:
     ret
 choose_medium_move ENDP
 
+
+; choose_easy_move
+; easy level of AI logic
 choose_easy_move PROC
     push ax
     push bx
@@ -387,11 +397,15 @@ load_selected_move:
     ret
 choose_easy_move ENDP
 
+; reset_best_list
+; clears the list of best-scored move indices
 reset_best_list PROC
     mov best_count, 0
     ret
 reset_best_list ENDP
 
+; record_best_index
+; adds one move index to the current best-move list
 record_best_index PROC
     push di
 
@@ -404,6 +418,8 @@ record_best_index PROC
     ret
 record_best_index ENDP
 
+; load_move_by_index
+; loads a move from ai_move_buffer into selected fields
 load_move_by_index PROC
     push si
     push di
@@ -430,6 +446,8 @@ load_move_by_index PROC
     ret
 load_move_by_index ENDP
 
+; get_selected_piece_type
+; reads the moving piece type from the selected source square
 get_selected_piece_type PROC
     push bx
 
@@ -447,6 +465,8 @@ get_selected_piece_type PROC
     ret
 get_selected_piece_type ENDP
 
+; make_selected_test_move
+; simulates the currently selected move on the board
 make_selected_test_move PROC
     xor ax, ax
     mov al, selected_to_col
@@ -467,6 +487,8 @@ make_selected_test_move PROC
     ret
 make_selected_test_move ENDP
 
+; undo_selected_test_move
+; restores the board after make_selected_test_move
 undo_selected_test_move PROC
     xor ax, ax
     mov al, selected_to_col
@@ -487,6 +509,8 @@ undo_selected_test_move PROC
     ret
 undo_selected_test_move ENDP
 
+; piece_value
+; returns the material value for the piece type in AL
 piece_value PROC
     cmp al, PAWN
     je piece_is_pawn
@@ -527,6 +551,8 @@ piece_is_queen:
     ret
 piece_value ENDP
 
+; evaluate_material
+; scores the board as own material minus enemy material
 evaluate_material PROC
     push bx
     push cx
@@ -572,6 +598,8 @@ eval_next:
     ret
 evaluate_material ENDP
 
+; check_opponent_in_check
+; returns whether the opponent king is in check after a test move
 check_opponent_in_check PROC
     push bx
     push cx
@@ -592,6 +620,8 @@ check_opponent_in_check PROC
     ret
 check_opponent_in_check ENDP
 
+; check_selected_square_attacked
+; returns whether the selected destination square is attacked
 check_selected_square_attacked PROC
     push bx
     push cx
@@ -620,6 +650,8 @@ check_selected_square_attacked PROC
     ret
 check_selected_square_attacked ENDP
 
+; check_selected_source_square_attacked
+; returns whether the selected source square is currently attacked
 check_selected_source_square_attacked PROC
     push bx
     push cx
@@ -648,6 +680,8 @@ check_selected_source_square_attacked PROC
     ret
 check_selected_source_square_attacked ENDP
 
+; init_rng_if_needed
+; seeds the random generator once using the BIOS timer
 init_rng_if_needed PROC
     ; Seed the generator once from the BIOS timer
     cmp rng_ready, 1
@@ -662,6 +696,8 @@ rng_ready_done:
     ret
 init_rng_if_needed ENDP
 
+; random_range
+; returns a random number in the range [0, BX)
 random_range PROC
     ; BX = N, AX returns a value in [0, N)
     push dx
@@ -685,6 +721,8 @@ random_range PROC
     ret
 random_range ENDP
 
+; is_move_capture
+; checks whether a move in ai_move_buffer captures a piece
 is_move_capture PROC
     ; SI points to one move in ai_move_buffer
     xor ax, ax
@@ -707,6 +745,8 @@ is_move_capture PROC
     ret
 is_move_capture ENDP
 
+; execute_selected_move
+; executes the move stored in selected fields
 execute_selected_move PROC
     ; Execute the chosen move
     push ax
@@ -733,6 +773,8 @@ execute_selected_move PROC
     ret
 execute_selected_move ENDP
 
+; collect_all_legal_moves
+; gathers every legal move for the side to move into ai_move_buffer
 collect_all_legal_moves PROC
     push ax
     push bx

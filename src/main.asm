@@ -9,11 +9,13 @@ INCLUDE shared.inc
     check_status  DB 0
 
     PUBLIC cursor_row, cursor_col, is_selected, from_row, from_col, need_redraw, prev_mouse_btn
-    ; Current cursor coordinates
+    
+    ; Cursor coords
     cursor_row DW 6
     cursor_col DW 4
 
-    is_selected DB 0    ; 0 = no piece selected, 1 = piece selected
+    ; Selection flag
+    is_selected DB 0
     from_row    DW 0
     from_col    DW 0
     promotion_msg DB 'Promote: 1-Q 2-R 3-B 4-N',0
@@ -52,6 +54,11 @@ INCLUDE shared.inc
     dif_med       DB '2. MEDIUM (Zaychyk Judy Hopps)', 0
     dif_hard      DB '3. HARD   (Pes Patron)', 0
 
+    ; Background data
+    PUBLIC bg_data
+    bg_filename DB 'bg.bin', 0
+    bg_data     DB 4000 DUP(0)
+
 .CODE
 
 PROMOTE_KNIGHT EQU 2
@@ -79,11 +86,14 @@ EXTRN current_turn:BYTE
 EXTRN waiting_for_promotion:BYTE
 
 EXTRN handle_input:PROC
-PUBLIC update_game_state, handle_promotion, clear_promotion_prompt
+PUBLIC update_game_state, handle_promotion, clear_promotion_prompt, load_background
 
 start:
     mov ax, @data
     mov ds, ax
+
+    ; Load BG file
+    call load_background 
 
     call init_video_mode
     mov ax, 0000h       
@@ -609,5 +619,38 @@ exit_program:
     int 10h
     mov ah, 4Ch
     int 21h
+
+; Read BG.BIN
+load_background PROC
+    push ax
+    push bx
+    push cx
+    push dx
+
+    ; Open file
+    mov ah, 3Dh
+    mov al, 0           
+    mov dx, offset bg_filename
+    int 21h
+    jc lb_end           
+    mov bx, ax          
+
+    ; Read 4000 bytes
+    mov ah, 3Fh
+    mov cx, 4000
+    mov dx, offset bg_data
+    int 21h
+
+    ; Close file
+    mov ah, 3Eh
+    int 21h
+
+lb_end:
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+load_background ENDP
 
 END start

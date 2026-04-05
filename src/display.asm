@@ -1,21 +1,24 @@
 .MODEL small
 INCLUDE shared.inc
+JUMPS            
 
 .DATA
     EXTRN board:BYTE
     EXTRN move_list:BYTE
     EXTRN move_count:WORD
     EXTRN current_turn:BYTE
-
     EXTRN captured_by_white:BYTE, captured_by_black:BYTE
     EXTRN cap_w_count:WORD, cap_b_count:WORD
-    
     EXTRN game_state:BYTE
     EXTRN check_status:BYTE
     EXTRN ai_mode:BYTE
     EXTRN ai_difficulty:BYTE  
+    EXTRN is_selected:BYTE
+    EXTRN from_row:WORD
+    EXTRN from_col:WORD
+    EXTRN bg_data:BYTE
 
-    ; Table of piece characters
+    ; Piece chars
     piece_chars DB ' ', 1, 2, 3, 4, 5, 6
 
     str_status_title_pvp DB 'Player vs Player  ', 0
@@ -37,21 +40,21 @@ INCLUDE shared.inc
     str_confirm          DB 'Enter  Select/Confirm', 0
     str_quit             DB 'Esc    Quit', 0
     
-    str_banner_chk_w DB 'CHECK! White king must escape check', 0
-    str_banner_chk_b DB 'CHECK! Black king must escape check', 0
+    str_banner_chk_w  DB 'CHECK! White king must escape check', 0
+    str_banner_chk_b  DB 'CHECK! Black king must escape check', 0
     str_banner_mate_w DB 'CHECKMATE! White wins. Press R for new game, Esc to quit', 0
     str_banner_mate_b DB 'CHECKMATE! Black wins. Press R for new game, Esc to quit', 0
-    str_banner_stale DB 'STALEMATE! Draw. Press R for new game, Esc to quit', 0
+    str_banner_stale  DB 'STALEMATE! Draw. Press R for new game, Esc to quit', 0
 
-    str_mate_title DB '*** CHECKMATE! ***', 0
+    str_mate_title  DB '*** CHECKMATE! ***', 0
     str_stale_title DB '*** STALEMATE ***', 0
-    str_white_wins DB 'White wins!', 0
-    str_black_wins DB 'Black wins!', 0
-    str_draw DB 'Game is a draw.', 0
+    str_white_wins  DB 'White wins!', 0
+    str_black_wins  DB 'Black wins!', 0
+    str_draw        DB 'Game is a draw.', 0
     
-    str_opt_title DB 'Options:', 0
-    str_opt_r DB 'R      New game', 0
-    str_opt_esc DB 'Esc    Quit to DOS', 0
+    str_opt_title   DB 'Options:', 0
+    str_opt_r       DB 'R      New game', 0
+    str_opt_esc     DB 'Esc    Quit to DOS', 0
 
     banner_color DB 0
     banner_str   DW 0
@@ -62,24 +65,18 @@ INCLUDE shared.inc
 LOCAL_BOARD_LEFT EQU 5 
 LOCAL_BOARD_TOP EQU 2   
 
-; make procs public for main.asm
-PUBLIC init_video_mode
-PUBLIC draw_board
-PUBLIC draw_piece
-PUBLIC draw_cursor
-PUBLIC highlight_moves
-PUBLIC draw_status
+PUBLIC init_video_mode, draw_background, draw_board, draw_piece, draw_cursor, highlight_moves, draw_status
 
 init_video_mode PROC
     mov ax, 0003h
     int 10h
-
+    mov ax, 1003h
+    mov bl, 0
+    int 10h
     push bp
     push es
-
     mov ax, ds
     mov es, ax
-
     mov ax, 1100h           
     mov bh, 16              
     mov bl, 0                
@@ -87,14 +84,43 @@ init_video_mode PROC
     mov dx, 1               
     mov bp, OFFSET font_data 
     int 10h  
-
     pop es                
     pop bp
-
     mov ax, 0B800h
     mov es, ax
+    
+    ; Draw background conditionally
+    call draw_background 
     ret
 init_video_mode ENDP
+
+draw_background PROC
+    ; Check Judy AI
+    cmp byte ptr ai_mode, 1
+    jne db_skip
+    cmp byte ptr ai_difficulty, 1
+    jne db_skip
+
+    push ax
+    push cx
+    push si
+    push di
+    push es
+    mov ax, 0B800h
+    mov es, ax
+    xor di, di 
+    mov si, offset bg_data
+    mov cx, 2000  
+    cld           
+    rep movsw     
+    pop es
+    pop di
+    pop si
+    pop cx
+    pop ax
+db_skip:
+    ret
+draw_background ENDP
 
 draw_board PROC
     push ax
@@ -102,11 +128,28 @@ draw_board PROC
     push cx
     push dx
     push di
+    push es
+    
+    mov ax, 0B800h
+    mov es, ax
 
     mov ch, 0
 r_loop:
     mov cl, 0
 c_loop:
+    ; Cyan selected cell
+    cmp byte ptr is_selected, 1
+    jne normal_colors
+    mov bx, from_row
+    cmp bl, ch
+    jne normal_colors
+    mov bx, from_col
+    cmp bl, cl
+    jne normal_colors
+    mov dh, 30h    
+    jmp draw_c
+
+normal_colors:
     ; Cell color logic
     mov al, ch
     add al, cl
@@ -119,8 +162,7 @@ light_c:
 
 draw_c:
     push dx
-    
-    ; Offset calculation
+    ; Calc offset
     mov al, ch
     mov ah, CELL_HEIGHT
     mul ah
@@ -128,7 +170,6 @@ draw_c:
     mov bx, 160
     mul bx
     mov di, ax
-
     mov al, cl
     mov ah, CELL_WIDTH
     mul ah
@@ -137,7 +178,7 @@ draw_c:
     add di, ax
     pop dx
 
-    ; Draw 4x2 cell
+    ; Draw cell
     mov ah, dh
     mov al, ' '
     mov es:[di], ax
@@ -149,9 +190,8 @@ draw_c:
     mov es:[di+164], ax
     mov es:[di+166], ax
 
-    ; Draw piece inside cell
+    ; Draw piece inside
     call draw_piece
-
     inc cl
     cmp cl, 8
     jge r_loop_check 
@@ -164,7 +204,7 @@ r_loop_check:
     jmp r_loop
 
 labels_draw:
-    ; Labels 1-8 (Left)
+    ; Left labels
     mov ch, 0
 lbl_r:
     mov al, ch
@@ -180,7 +220,11 @@ lbl_r:
     add di, ax
     mov al, '8'
     sub al, ch
-    mov ah, 07h
+    
+    ; Keep bg color
+    mov ah, es:[di+1]
+    and ah, 0F0h
+    or ah, 0Fh
     mov es:[di], ax
     inc ch
     cmp ch, 8
@@ -188,7 +232,7 @@ lbl_r:
     jmp lbl_r
 
 lbl_c_start:
-    ; Labels a-h (Bottom)
+    ; Bottom labels
     mov cl, 0
 lbl_c:
     mov ax, LOCAL_BOARD_TOP
@@ -205,7 +249,11 @@ lbl_c:
     add di, ax
     mov al, 'a'
     add al, cl
-    mov ah, 07h
+    
+    ; Keep bg color
+    mov ah, es:[di+1]
+    and ah, 0F0h
+    or ah, 0Fh
     mov es:[di], ax
     inc cl
     cmp cl, 8
@@ -213,6 +261,7 @@ lbl_c:
     jmp lbl_c
 
 board_end:
+    pop es
     pop di
     pop dx
     pop cx
@@ -225,8 +274,8 @@ draw_piece PROC
     push ax
     push bx
     push di
-
-    ; Index = row * 8 + col
+    
+    ; Calc index
     mov al, ch
     mov ah, 8
     mul ah
@@ -238,12 +287,23 @@ draw_piece PROC
     mov al, dl
     and al, TYPE_MASK
     jz dp_end
-
     mov bl, al
     xor bh, bh
     mov al, piece_chars[bx]
 
-    ; Colors
+    ; Selected background
+    cmp byte ptr is_selected, 1
+    jne p_normal
+    mov bx, from_row
+    cmp bl, ch
+    jne p_normal
+    mov bx, from_col
+    cmp bl, cl
+    jne p_normal
+    mov dh, 30h
+    jmp p_color
+
+p_normal:
     mov dh, ch
     add dh, cl
     test dh, 1
@@ -253,6 +313,7 @@ draw_piece PROC
 p_light:
     mov dh, COLOR_LIGHT
 p_color:
+    ; Piece colors
     test dl, COLOR_MASK
     jz p_white
     and dh, 0F0h       
@@ -280,7 +341,6 @@ p_draw:
     add di, ax
     pop ax
     pop dx
-
     mov ah, dh
     mov es:[di], ax
 
@@ -297,6 +357,10 @@ draw_cursor PROC
     push cx
     push dx
     push di
+    push es
+    
+    mov ax, 0B800h
+    mov es, ax
 
     mov al, ch
     mov ah, CELL_HEIGHT
@@ -312,9 +376,10 @@ draw_cursor PROC
     shl ax, 1
     add di, ax
 
+    ; Blue cursor bg 
     mov al, es:[di+1]   
     and al, 0Fh         
-    or al, 10h          
+    or al, 10h         
     mov es:[di+1], al   
     mov al, es:[di+3]
     and al, 0Fh
@@ -345,6 +410,7 @@ draw_cursor PROC
     or al, 10h
     mov es:[di+167], al
 
+    pop es
     pop di
     pop dx
     pop cx
@@ -361,10 +427,8 @@ highlight_moves PROC
     push si
     push di
     push es
-
     mov ax, 0B800h
     mov es, ax
-
     mov cx, move_count
     cmp cx, 0
     jne hm_start
@@ -374,7 +438,6 @@ hm_start:
 
 hm_loop:
     push cx  
-
     mov ch, [si+2] 
     mov cl, [si+3] 
 
@@ -385,7 +448,6 @@ hm_loop:
     mov bx, ax
     xor bh, bh
     mov dl, board[bx]
-
     mov al, dl
     and al, TYPE_MASK
     cmp al, 0
@@ -410,15 +472,16 @@ hm_loop:
     je hm_green
 
 hm_red:
-    mov ah, 40h
+    ; Red highlight
+    mov ah, 40h 
     jmp hm_apply
 
 hm_green:
-    mov ah, 20h
+    ; Green highlight
+    mov ah, 20h 
 
 hm_apply:
     push ax
-
     mov al, ch
     push cx
     mov cl, CELL_HEIGHT
@@ -437,21 +500,50 @@ hm_apply:
     shl ax, 1
     add di, ax
     pop cx
-
     pop ax 
 
-    push di
-    add di, 1
-    call paint_8attrs
-    pop di
-
-    push di
-    add di, 161
-    call paint_8attrs
-    pop di
+    ; Apply color attr
+    mov al, es:[di+1]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+1], al
+    
+    mov al, es:[di+3]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+3], al
+    
+    mov al, es:[di+5]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+5], al
+    
+    mov al, es:[di+7]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+7], al
+    
+    mov al, es:[di+161]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+161], al
+    
+    mov al, es:[di+163]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+163], al
+    
+    mov al, es:[di+165]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+165], al
+    
+    mov al, es:[di+167]
+    and al, 0Fh
+    or al, ah
+    mov es:[di+167], al
 
     pop cx  
-
     add si, 4
     dec cx
     jz hm_end
@@ -468,29 +560,6 @@ hm_end:
     ret
 highlight_moves ENDP
 
-paint_8attrs PROC
-    mov al, es:[di]
-    and al, 0Fh
-    or al, ah
-    mov es:[di], al
-
-    mov al, es:[di+2]
-    and al, 0Fh
-    or al, ah
-    mov es:[di+2], al
-
-    mov al, es:[di+4]
-    and al, 0Fh
-    or al, ah
-    mov es:[di+4], al
-
-    mov al, es:[di+6]
-    and al, 0Fh
-    or al, ah
-    mov es:[di+6], al
-    ret
-paint_8attrs ENDP
-
 draw_status PROC
     push ax
     push bx
@@ -503,59 +572,6 @@ draw_status PROC
     mov ax, 0B800h
     mov es, ax
     cld
-
-    mov cx, 3
-clear_pan_r:
-    push cx
-    mov ax, cx
-    mov bx, 160
-    mul bx
-    add ax, 82
-    mov di, ax
-    mov cx, 38
-    mov ax, 0720h
-    rep stosw
-    pop cx
-    inc cx
-    cmp cx, 23
-    jl clear_pan_r
-
-    mov di, 160 * 24
-    mov cx, 80
-    mov ax, 0720h
-    rep stosw
-
-    mov cx, 37
-    mov di, 160 * 2 + 82
-    mov bx, 160 * 23 + 82
-    mov ax, 07CDh
-ds_tb:
-    mov es:[di], ax
-    mov es:[bx], ax
-    add di, 2
-    add bx, 2
-    loop ds_tb
-    
-    mov cx, 3
-ds_lr:
-    push cx
-    mov ax, cx
-    mov bx, 160
-    mul bx
-    add ax, 80
-    mov di, ax
-    mov ax, 07BAh
-    mov es:[di], ax
-    mov es:[di+76], ax
-    pop cx
-    inc cx
-    cmp cx, 23
-    jl ds_lr
-    
-    mov word ptr es:[160*2+80], 07C9h
-    mov word ptr es:[160*2+156], 07BBh
-    mov word ptr es:[160*23+80], 07C8h
-    mov word ptr es:[160*23+156], 07BCh
     
     mov di, 160 * 2 + 84
     cmp byte ptr ai_mode, 1
@@ -580,8 +596,7 @@ dsp_title_is_pvp:
     mov si, offset str_status_title_pvp
 
 dsp_title_do_draw:
-    call draw_status_string_white
-    ; --------------------------------------
+    call draw_status_string_yellow
 
     cmp byte ptr game_state, 0
     jne ui_game_over
@@ -597,7 +612,6 @@ chk_mate_b:
     jne ui_stale
     jmp draw_mate_b
 ui_stale:
-
     mov di, 160 * 6 + 88
     mov si, offset str_stale_title
     call draw_status_string_yellow
@@ -662,7 +676,6 @@ dw_t:
     jne do_chk
     jmp ds_cap
 do_chk:
-
     mov di, 160 * 6 + 88
     mov si, offset str_check_p
     call draw_status_string_red
@@ -698,6 +711,7 @@ ds_cap_cont:
     mov si, offset str_by_black
     call draw_status_string
 
+    ; Captured white pieces
     mov di, 160 * 10 + 108
     mov si, offset captured_by_white
     mov cx, cap_w_count
@@ -712,14 +726,18 @@ dcw_lp:
     xor bx, bx
     mov bl, al
     mov al, piece_chars[bx]
-    mov ah, 0Ch
-    mov es:[di], ax
+    
+    mov bh, 1Fh       
+    mov es:[di+1], bh
+    mov es:[di], al
+
     add di, 2
     inc si
     dec cx
     jnz dcw_lp
 
 ds_cap_b:
+    ; Captured black pieces
     mov di, 160 * 11 + 108
     mov si, offset captured_by_black
     mov cx, cap_b_count
@@ -734,8 +752,11 @@ dcb_lp:
     xor bx, bx
     mov bl, al
     mov al, piece_chars[bx]
-    mov ah, 0Fh
-    mov es:[di], ax
+    
+    mov bh, 70h       
+    mov es:[di+1], bh
+    mov es:[di], al
+
     add di, 2
     inc si
     dec cx
@@ -793,12 +814,18 @@ ds_end:
     ret
 draw_status ENDP
 
+; Transparent text draw
 draw_ss_loop PROC
 ss_loop_start:
     mov al, [si]
     cmp al, 0
     je ss_loop_done
-    mov es:[di], ax
+    
+    mov bh, 10h        
+    or  bh, ah         
+    mov es:[di+1], bh  
+    mov es:[di], al    
+    
     add di, 2
     inc si
     jmp ss_loop_start
@@ -807,7 +834,7 @@ ss_loop_done:
 draw_ss_loop ENDP
 
 draw_status_string PROC
-    mov ah, 07h
+    mov ah, 0Fh
     call draw_ss_loop
     ret
 draw_status_string ENDP

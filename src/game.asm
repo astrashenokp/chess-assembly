@@ -23,6 +23,8 @@ PUBLIC last_move_was_capture, last_captured_piece, last_mover_color
 last_move_was_capture DB 0
 last_captured_piece   DB 0
 last_mover_color      DB 0
+PUBLIC halfmove_clock
+halfmove_clock DW 0
 en_passant_available DB 0
 en_passant_row DB ?
 en_passant_col DB ?
@@ -126,6 +128,7 @@ PUBLIC is_in_check
 PUBLIC is_square_attacked
 PUBLIC is_checkmate
 PUBLIC is_stalemate
+PUBLIC is_fifty_move_draw
 PUBLIC get_move_capture_info
 PUBLIC make_test_move 
 PUBLIC undo_test_move
@@ -151,6 +154,7 @@ copy_loop:
     mov last_move_was_capture, 0
     mov last_captured_piece, 0
     mov last_mover_color, 0
+    mov halfmove_clock, 0
     mov en_passant_available, 0
     mov white_king_pos, 60
     mov black_king_pos, 4
@@ -1556,7 +1560,7 @@ start_promotion:
     shr al, 3
     mov promotion_color, al
 
-    jmp clear_source_only
+    jmp update_halfmove_clock
 
 clear_old_en_passant:
     mov en_passant_available, 0
@@ -1564,6 +1568,23 @@ clear_old_en_passant:
 
 finalize_move:
     xor current_turn, 1
+    jmp update_halfmove_clock
+
+update_halfmove_clock:
+    ; reset after pawn move or any capture, otherwise increment
+    mov al, bl
+    and al, TYPE_MASK
+    cmp al, PAWN
+    je reset_halfmove_clock
+
+    cmp last_move_was_capture, 1
+    je reset_halfmove_clock
+
+    inc halfmove_clock
+    jmp clear_source_only
+
+reset_halfmove_clock:
+    mov halfmove_clock, 0
 
 clear_source_only:
 
@@ -2571,6 +2592,22 @@ is_stalemate_done:
     pop bp
     ret 2
 is_stalemate ENDP
+
+
+; is_fifty_move_draw
+; output: AL = 1 if halfmove_clock >= 100
+is_fifty_move_draw PROC
+    mov ax, halfmove_clock
+    cmp ax, 100
+    jb no_fifty_move_draw
+
+    mov al, 1
+    ret
+
+no_fifty_move_draw:
+    xor al, al
+    ret
+is_fifty_move_draw ENDP
 
 
 ; get_move_capture_info

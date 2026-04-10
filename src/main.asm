@@ -82,6 +82,7 @@ EXTRN draw_status:PROC
 EXTRN is_in_check:PROC
 EXTRN is_checkmate:PROC
 EXTRN is_stalemate:PROC
+EXTRN is_fifty_move_draw:PROC
 EXTRN current_turn:BYTE
 EXTRN waiting_for_promotion:BYTE
 
@@ -470,6 +471,13 @@ ugs_stalemate:
     mov al, current_turn
     push ax
     call is_stalemate
+    cmp al, 1
+    jne ugs_fifty_move
+    mov game_state, 3
+    jmp ugs_check_status
+
+ugs_fifty_move:
+    call is_fifty_move_draw
     cmp al, 1
     jne ugs_active
     mov game_state, 3

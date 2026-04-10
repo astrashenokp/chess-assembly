@@ -33,6 +33,12 @@ promotion_col DB ?
 promotion_color DB ?
 white_king_pos  DB ?
 black_king_pos  DB ?
+white_king_moved DB 0
+black_king_moved DB 0
+white_rook_a_moved DB 0
+white_rook_h_moved DB 0
+black_rook_a_moved DB 0
+black_rook_h_moved DB 0
 PUBLIC captured_by_white, captured_by_black, cap_w_count, cap_b_count
 captured_by_white DB 16 DUP(0)
 captured_by_black DB 16 DUP(0)
@@ -45,6 +51,11 @@ test_saved_black_king_pos DB 0
 test_saved_ep_piece DB 0
 test_saved_ep_index DB 0
 test_ep_active DB 0
+test_castle_active DB 0
+test_saved_rook_from_index DB 0
+test_saved_rook_to_index DB 0
+test_saved_rook_from_piece DB 0
+test_saved_rook_to_piece DB 0
 
  
 ; Move buffer
@@ -143,6 +154,13 @@ copy_loop:
     mov en_passant_available, 0
     mov white_king_pos, 60
     mov black_king_pos, 4
+    mov white_king_moved, 0
+    mov black_king_moved, 0
+    mov white_rook_a_moved, 0
+    mov white_rook_h_moved, 0
+    mov black_rook_a_moved, 0
+    mov black_rook_h_moved, 0
+    mov test_castle_active, 0
     
     mov cap_w_count, 0
     mov cap_b_count, 0
@@ -401,6 +419,279 @@ knight_next:
 generate_knight_moves ENDP
 
 
+; returns 0 = not castling, 1 = kingside, 2 = queenside
+is_castling_move PROC
+    push bp
+    mov bp, sp
+
+piece    EQU [bp+4]
+from_row EQU [bp+6]
+from_col EQU [bp+8]
+to_row   EQU [bp+10]
+to_col   EQU [bp+12]
+
+    mov al, piece
+    and al, TYPE_MASK
+    cmp al, KING
+    jne no_castling_move
+
+    mov al, from_row
+    cmp al, to_row
+    jne no_castling_move
+
+    mov al, from_col
+    add al, 2
+    cmp al, to_col
+    je kingside_castling_move
+
+    mov al, from_col
+    sub al, 2
+    cmp al, to_col
+    je queenside_castling_move
+
+no_castling_move:
+    xor al, al
+    pop bp
+    ret 10
+
+kingside_castling_move:
+    mov al, 1
+    pop bp
+    ret 10
+
+queenside_castling_move:
+    mov al, 2
+    pop bp
+    ret 10
+is_castling_move ENDP
+
+
+; try_add_castling_moves
+; appends legal castling king moves to move_list
+try_add_castling_moves PROC
+    push bp
+    mov bp, sp
+    push ax
+    push bx
+    push dx
+    push si
+    push di
+
+row EQU [bp+4]
+col EQU [bp+6]
+
+    ; castling only exists from the king start column
+    mov al, col
+    cmp al, 4
+    je castling_col_ok
+    jmp castling_done
+
+castling_col_ok:
+
+    cmp selected_color, WHITE
+    jne setup_black_castling
+
+    mov al, row
+    cmp al, 7
+    je white_row_ok
+    jmp castling_done
+
+white_row_ok:
+    cmp white_king_moved, 0
+    je white_king_right_ok
+    jmp castling_done
+
+white_king_right_ok:
+    jmp castling_ready
+
+setup_black_castling:
+    mov al, row
+    cmp al, 0
+    je black_row_ok
+    jmp castling_done
+
+black_row_ok:
+    cmp black_king_moved, 0
+    je black_king_right_ok
+    jmp castling_done
+
+black_king_right_ok:
+
+castling_ready:
+    ; king cannot castle out of check
+    xor ax, ax
+    mov al, selected_color
+    push ax
+    call is_in_check
+    cmp al, 0
+    je castling_not_in_check
+    jmp castling_done
+
+castling_not_in_check:
+
+    mov dl, selected_color
+    xor dl, 1
+
+    mov bl, ROOK
+    cmp selected_color, WHITE
+    je rook_piece_ready
+    or bl, BLACK_BIT
+
+rook_piece_ready:
+    mov al, row
+    shl al, 3
+    xor ah, ah
+    mov si, ax
+
+    cmp selected_color, WHITE
+    jne check_black_kingside_right
+    cmp white_rook_h_moved, 0
+    jne castle_queenside
+    jmp check_kingside_path
+
+check_black_kingside_right:
+    cmp black_rook_h_moved, 0
+    jne castle_queenside
+
+check_kingside_path:
+    ; columns 5 and 6 must be empty, rook must stay on the corner
+    mov di, si
+    add di, 5
+    cmp board[di], EMPTY
+    jne castle_queenside
+
+    inc di
+    cmp board[di], EMPTY
+    jne castle_queenside
+
+    inc di
+    cmp board[di], bl
+    jne castle_queenside
+
+    xor ax, ax
+    mov al, dl
+    push ax
+    xor ax, ax
+    mov al, 5
+    push ax
+    xor ax, ax
+    mov al, row
+    push ax
+    call is_square_attacked
+    cmp al, 0
+    jne castle_queenside
+
+    xor ax, ax
+    mov al, dl
+    push ax
+    xor ax, ax
+    mov al, 6
+    push ax
+    xor ax, ax
+    mov al, row
+    push ax
+    call is_square_attacked
+    cmp al, 0
+    jne castle_queenside
+
+    ; store castling as a regular king move from e to g
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+    mov al, col
+    mov [di+1], al
+    mov al, row
+    mov [di+2], al
+    mov byte ptr [di+3], 6
+    inc move_count
+
+castle_queenside:
+    cmp selected_color, WHITE
+    jne check_black_queenside_right
+    cmp white_rook_a_moved, 0
+    je white_queenside_right_ok
+    jmp castling_done
+
+white_queenside_right_ok:
+    jmp check_queenside_path
+
+check_black_queenside_right:
+    cmp black_rook_a_moved, 0
+    jne castling_done
+
+check_queenside_path:
+    ; columns 1, 2 and 3 must be empty, rook must stay on the corner
+    mov di, si
+    add di, 1
+    cmp board[di], EMPTY
+    jne castling_done
+
+    inc di
+    cmp board[di], EMPTY
+    jne castling_done
+
+    inc di
+    cmp board[di], EMPTY
+    jne castling_done
+
+    mov di, si
+    cmp board[di], bl
+    jne castling_done
+
+    xor ax, ax
+    mov al, dl
+    push ax
+    xor ax, ax
+    mov al, 3
+    push ax
+    xor ax, ax
+    mov al, row
+    push ax
+    call is_square_attacked
+    cmp al, 0
+    jne castling_done
+
+    xor ax, ax
+    mov al, dl
+    push ax
+    xor ax, ax
+    mov al, 2
+    push ax
+    xor ax, ax
+    mov al, row
+    push ax
+    call is_square_attacked
+    cmp al, 0
+    jne castling_done
+
+    ; store castling as a regular king move from e to c
+    mov di, [move_count]
+    shl di, 2
+    add di, offset move_list
+
+    mov al, row
+    mov [di], al
+    mov al, col
+    mov [di+1], al
+    mov al, row
+    mov [di+2], al
+    mov byte ptr [di+3], 2
+    inc move_count
+
+castling_done:
+    pop di
+    pop si
+    pop dx
+    pop bx
+    pop ax
+    pop bp
+    ret 4
+try_add_castling_moves ENDP
+
+
 ; KING
 generate_king_moves PROC
     push bp
@@ -481,6 +772,11 @@ king_next:
 
     add si, 2
     loop king_loop
+
+    push col
+    push row
+    call try_add_castling_moves
+
     pop bp
     ret 4
 generate_king_moves ENDP
@@ -916,6 +1212,25 @@ to_col   EQU [bp+10]
     ; piece = board[from]
     mov bl, board[si]
 
+    ; check whether the king move is a castling move
+    xor ax, ax
+    mov al, to_col
+    push ax
+    xor ax, ax
+    mov al, to_row
+    push ax
+    xor ax, ax
+    mov al, from_col
+    push ax
+    xor ax, ax
+    mov al, from_row
+    push ax
+    xor ax, ax
+    mov al, bl
+    push ax
+    call is_castling_move
+    mov bh, al
+
     mov al, bl
     and al, COLOR_MASK
     shr al, 3
@@ -937,6 +1252,45 @@ to_col   EQU [bp+10]
     mov ah, board[di]
     cmp ah, EMPTY
     je skip_rec
+
+    ; capturing a rook on its start corner also removes castling rights
+    mov al, ah
+    and al, TYPE_MASK
+    cmp al, ROOK
+    jne record_current_capture
+
+    mov al, to_row
+    cmp al, 7
+    jne check_black_corner_capture
+
+    mov al, to_col
+    cmp al, 0
+    jne check_white_h_corner_capture
+    mov white_rook_a_moved, 1
+    jmp record_current_capture
+
+check_white_h_corner_capture:
+    cmp al, 7
+    jne record_current_capture
+    mov white_rook_h_moved, 1
+    jmp record_current_capture
+
+check_black_corner_capture:
+    cmp al, 0
+    jne record_current_capture
+
+    mov al, to_col
+    cmp al, 0
+    jne check_black_h_corner_capture
+    mov black_rook_a_moved, 1
+    jmp record_current_capture
+
+check_black_h_corner_capture:
+    cmp al, 7
+    jne record_current_capture
+    mov black_rook_h_moved, 1
+
+record_current_capture:
     mov last_move_was_capture, 1
     mov last_captured_piece, ah
     call record_capture
@@ -951,7 +1305,7 @@ skip_rec:
 
     cmp al, KING
     je update_king_pos
-    jmp check_pawn_promotion
+    jmp update_castling_rights
 
 update_king_pos:
     mov al, bl
@@ -961,10 +1315,116 @@ update_king_pos:
     jne black_king_move
 
     mov white_king_pos, dl
-    jmp check_pawn_promotion
+    jmp handle_castling_rook_move
 
 black_king_move:
     mov black_king_pos, dl
+
+handle_castling_rook_move:
+    cmp bh, 0
+    je update_castling_rights
+    push si
+    push di
+    cmp bh, 1
+    jne castle_queenside_rook_move
+
+    ; move rook from column 7 to column 5
+    mov al, to_row
+    shl al, 3
+    add al, 7
+    xor ah, ah
+    mov si, ax
+
+    mov al, to_row
+    shl al, 3
+    add al, 5
+    xor ah, ah
+    mov di, ax
+    mov al, board[si]
+    mov board[di], al
+    mov board[si], EMPTY
+    pop di
+    pop si
+    jmp update_castling_rights
+
+castle_queenside_rook_move:
+    ; move rook from column 0 to column 3
+    mov al, to_row
+    shl al, 3
+    xor ah, ah
+    mov si, ax
+
+    mov al, to_row
+    shl al, 3
+    add al, 3
+    xor ah, ah
+    mov di, ax
+    mov al, board[si]
+    mov board[di], al
+    mov board[si], EMPTY
+    pop di
+    pop si
+
+update_castling_rights:
+    ; once king or rook moves, castling rights are gone for that side/corner
+    mov al, bl
+    and al, TYPE_MASK
+    cmp al, KING
+    jne check_moved_rook_rights
+
+    mov al, bl
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, WHITE
+    jne set_black_king_moved_flag
+    mov white_king_moved, 1
+    jmp check_pawn_promotion
+
+set_black_king_moved_flag:
+    mov black_king_moved, 1
+    jmp check_pawn_promotion
+
+check_moved_rook_rights:
+    cmp al, ROOK
+    jne check_pawn_promotion
+
+    mov al, bl
+    and al, COLOR_MASK
+    shr al, 3
+    cmp al, WHITE
+    jne check_black_rook_move_rights
+
+    mov al, from_row
+    cmp al, 7
+    jne check_pawn_promotion
+
+    mov al, from_col
+    cmp al, 0
+    jne check_white_rook_h_move
+    mov white_rook_a_moved, 1
+    jmp check_pawn_promotion
+
+check_white_rook_h_move:
+    cmp al, 7
+    jne check_pawn_promotion
+    mov white_rook_h_moved, 1
+    jmp check_pawn_promotion
+
+check_black_rook_move_rights:
+    mov al, from_row
+    cmp al, 0
+    jne check_pawn_promotion
+
+    mov al, from_col
+    cmp al, 0
+    jne check_black_rook_h_move
+    mov black_rook_a_moved, 1
+    jmp check_pawn_promotion
+
+check_black_rook_h_move:
+    cmp al, 7
+    jne check_pawn_promotion
+    mov black_rook_h_moved, 1
 
 check_pawn_promotion:
     mov al, bl
@@ -1200,8 +1660,9 @@ from_col EQU [bp+6]
 to_row   EQU [bp+8]
 to_col   EQU [bp+10]
 
-    ; clear temporary en passant state for this tested move
+    ; clear temporary en passant and castling state for this tested move
     mov test_ep_active, 0
+    mov test_castle_active, 0
 
     ; save king positions so undo can restore them
     mov al, white_king_pos
@@ -1227,6 +1688,25 @@ to_col   EQU [bp+10]
     mov al, board[di]
     mov test_saved_to, al
 
+    ; remember whether the simulated move is castling
+    xor ax, ax
+    mov al, to_col
+    push ax
+    xor ax, ax
+    mov al, to_row
+    push ax
+    xor ax, ax
+    mov al, from_col
+    push ax
+    xor ax, ax
+    mov al, from_row
+    push ax
+    xor ax, ax
+    mov al, bl
+    push ax
+    call is_castling_move
+    mov test_castle_active, al
+
     ; make the move only on board state
     mov board[di], bl
     mov board[si], EMPTY
@@ -1235,7 +1715,10 @@ to_col   EQU [bp+10]
     mov al, bl
     and al, TYPE_MASK
     cmp al, KING
-    jne test_pawn_move
+    je test_is_king_move
+    jmp test_pawn_move
+
+test_is_king_move:
 
     mov al, bl
     and al, COLOR_MASK
@@ -1247,13 +1730,68 @@ to_col   EQU [bp+10]
     shl al, 3
     add al, to_col
     mov white_king_pos, al
-    jmp test_move_done
+    jmp test_castle_rook_move
 
 test_black_king_move:
     mov al, to_row
     shl al, 3
     add al, to_col
     mov black_king_pos, al
+    jmp test_castle_rook_move
+
+test_castle_rook_move:
+    cmp test_castle_active, 0
+    jne test_castle_active_continue
+    jmp test_move_done
+
+test_castle_active_continue:
+    ; simulate the rook move too
+    cmp test_castle_active, 1
+    jne test_queenside_rook_move
+
+    mov dl, to_row
+    shl dl, 3
+
+    mov al, dl
+    add al, 7
+    mov test_saved_rook_from_index, al
+
+    mov al, dl
+    add al, 5
+    mov test_saved_rook_to_index, al
+    jmp test_castle_rook_indices_ready
+
+test_queenside_rook_move:
+    mov dl, to_row
+    shl dl, 3
+
+    mov al, dl
+    mov test_saved_rook_from_index, al
+
+    mov al, dl
+    add al, 3
+    mov test_saved_rook_to_index, al
+
+test_castle_rook_indices_ready:
+    mov al, test_saved_rook_from_index
+    xor ah, ah
+    mov si, ax
+    mov al, board[si]
+    mov test_saved_rook_from_piece, al
+
+    mov al, test_saved_rook_to_index
+    xor ah, ah
+    mov di, ax
+    mov al, board[di]
+    mov test_saved_rook_to_piece, al
+
+    mov al, test_saved_rook_from_piece
+    mov board[di], al
+
+    mov al, test_saved_rook_from_index
+    xor ah, ah
+    mov si, ax
+    mov board[si], EMPTY
     jmp test_move_done
 
 test_pawn_move:
@@ -1342,6 +1880,24 @@ to_col   EQU [bp+10]
     mov al, test_saved_black_king_pos
     mov black_king_pos, al
 
+    ; restore rook squares after a simulated castle
+    cmp test_castle_active, 0
+    je undo_ep_restore_check
+
+    mov al, test_saved_rook_from_index
+    xor ah, ah
+    mov si, ax
+    mov al, test_saved_rook_from_piece
+    mov board[si], al
+
+    mov al, test_saved_rook_to_index
+    xor ah, ah
+    mov di, ax
+    mov al, test_saved_rook_to_piece
+    mov board[di], al
+    mov test_castle_active, 0
+
+undo_ep_restore_check:
     ; restore captured pawn if the tested move was en passant
     cmp test_ep_active, 1
     jne undo_test_done

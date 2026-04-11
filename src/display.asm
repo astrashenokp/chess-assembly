@@ -17,6 +17,7 @@ JUMPS
     EXTRN from_row:WORD
     EXTRN from_col:WORD
     EXTRN bg_data:BYTE
+    EXTRN current_quote:WORD ; Получаем цитату из main.asm
 
     ; Piece chars
     piece_chars DB ' ', 1, 2, 3, 4, 5, 6
@@ -89,18 +90,15 @@ init_video_mode PROC
     mov ax, 0B800h
     mov es, ax
     
-    ; Draw background conditionally
     call draw_background 
     ret
 init_video_mode ENDP
 
 draw_background PROC
-    ; Check Judy AI
     cmp byte ptr ai_mode, 1
     jne db_skip
-    cmp byte ptr ai_difficulty, 1
-    jne db_skip
-
+    
+    ; Теперь рисует фон всегда, если играем против ШИ
     push ax
     push cx
     push si
@@ -137,7 +135,6 @@ draw_board PROC
 r_loop:
     mov cl, 0
 c_loop:
-    ; Cyan selected cell
     cmp byte ptr is_selected, 1
     jne normal_colors
     mov bx, from_row
@@ -150,7 +147,6 @@ c_loop:
     jmp draw_c
 
 normal_colors:
-    ; Cell color logic
     mov al, ch
     add al, cl
     test al, 1
@@ -162,7 +158,6 @@ light_c:
 
 draw_c:
     push dx
-    ; Calc offset
     mov al, ch
     mov ah, CELL_HEIGHT
     mul ah
@@ -178,7 +173,6 @@ draw_c:
     add di, ax
     pop dx
 
-    ; Draw cell
     mov ah, dh
     mov al, ' '
     mov es:[di], ax
@@ -190,7 +184,6 @@ draw_c:
     mov es:[di+164], ax
     mov es:[di+166], ax
 
-    ; Draw piece inside
     call draw_piece
     inc cl
     cmp cl, 8
@@ -204,7 +197,6 @@ r_loop_check:
     jmp r_loop
 
 labels_draw:
-    ; Left labels
     mov ch, 0
 lbl_r:
     mov al, ch
@@ -221,7 +213,6 @@ lbl_r:
     mov al, '8'
     sub al, ch
     
-    ; Keep bg color
     mov ah, es:[di+1]
     and ah, 0F0h
     or ah, 0Fh
@@ -232,7 +223,6 @@ lbl_r:
     jmp lbl_r
 
 lbl_c_start:
-    ; Bottom labels
     mov cl, 0
 lbl_c:
     mov ax, LOCAL_BOARD_TOP
@@ -250,7 +240,6 @@ lbl_c:
     mov al, 'a'
     add al, cl
     
-    ; Keep bg color
     mov ah, es:[di+1]
     and ah, 0F0h
     or ah, 0Fh
@@ -275,7 +264,6 @@ draw_piece PROC
     push bx
     push di
     
-    ; Calc index
     mov al, ch
     mov ah, 8
     mul ah
@@ -291,7 +279,6 @@ draw_piece PROC
     xor bh, bh
     mov al, piece_chars[bx]
 
-    ; Selected background
     cmp byte ptr is_selected, 1
     jne p_normal
     mov bx, from_row
@@ -313,7 +300,6 @@ p_normal:
 p_light:
     mov dh, COLOR_LIGHT
 p_color:
-    ; Piece colors
     test dl, COLOR_MASK
     jz p_white
     and dh, 0F0h       
@@ -376,7 +362,6 @@ draw_cursor PROC
     shl ax, 1
     add di, ax
 
-    ; Blue cursor bg 
     mov al, es:[di+1]   
     and al, 0Fh         
     or al, 10h         
@@ -472,12 +457,10 @@ hm_loop:
     je hm_green
 
 hm_red:
-    ; Red highlight
     mov ah, 40h 
     jmp hm_apply
 
 hm_green:
-    ; Green highlight
     mov ah, 20h 
 
 hm_apply:
@@ -502,7 +485,6 @@ hm_apply:
     pop cx
     pop ax 
 
-    ; Apply color attr
     mov al, es:[di+1]
     and al, 0Fh
     or al, ah
@@ -776,6 +758,14 @@ ds_ctrl:
     mov si, offset str_quit
     call draw_status_string_cyan
 
+    ; --- ВЫВОД ЦИТАТЫ РИНАТЫ ---
+    cmp byte ptr ai_mode, 1
+    jne check_banner
+    mov di, 160 * 13 + 84
+    mov si, current_quote
+    call draw_status_string_yellow
+
+check_banner:
     cmp word ptr banner_str, 0
     jne do_banner
     jmp ds_end 
@@ -814,7 +804,6 @@ ds_end:
     ret
 draw_status ENDP
 
-; Transparent text draw
 draw_ss_loop PROC
 ss_loop_start:
     mov al, [si]

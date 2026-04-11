@@ -54,12 +54,39 @@ INCLUDE shared.inc
     dif_med       DB '2. MEDIUM (Zaychyk Judy Hopps)', 0
     dif_hard      DB '3. HARD   (Pes Patron)', 0
 
-    ; Background data
+    ; --- ФОНИ ДЛЯ РІЗНИХ ШІ ---
     PUBLIC bg_data
-    bg_filename DB 'bg.bin', 0
-    bg_data     DB 4000 DUP(0)
+    bg_f0         DB 'bg0.bin', 0
+    bg_f1         DB 'bg1.bin', 0
+    bg_f2         DB 'bg2.bin', 0
+    bg_data       DB 4000 DUP(0)
+
+    ; --- ЗМІННІ З GAME.ASM ДЛЯ ПЕРЕВІРКИ ЗДЗУ ---
+    EXTRN last_move_was_capture:BYTE
+    EXTRN last_captured_piece:BYTE
+
+    ; --- СИСТЕМА ЦИТАТ ---
+    PUBLIC current_quote
+    current_quote  DW offset q_empty
+    q_empty        DB ' ', 0
+    
+    ; Заглушки цитат, сюди вписуй свої або Рінатині:
+    q_ai_cap_queen DB '"Ouch! Say goodbye to your Queen!"', 0
+    q_ai_cap_rook  DB '"Nice Rook. I will take it."', 0
+    q_ai_cap_minor DB '"Just a minor piece, but thanks!"', 0
+    q_ai_cap_pawn  DB '"Yummy pawn! Om-nom-nom!"', 0
+    q_ai_default   DB '"Hmm... Your move, human."', 0
 
 .CODE
+
+; --- КОНСТАНТИ ФІГУР ---
+EMPTY  EQU 0
+PAWN   EQU 1
+KNIGHT EQU 2
+BISHOP EQU 3
+ROOK   EQU 4
+QUEEN  EQU 5
+KING   EQU 6
 
 PROMOTE_KNIGHT EQU 2
 PROMOTE_BISHOP EQU 3
@@ -87,14 +114,11 @@ EXTRN current_turn:BYTE
 EXTRN waiting_for_promotion:BYTE
 
 EXTRN handle_input:PROC
-PUBLIC update_game_state, handle_promotion, clear_promotion_prompt, load_background
+PUBLIC update_game_state, handle_promotion, clear_promotion_prompt, load_background, play_move_sound
 
 start:
     mov ax, @data
     mov ds, ax
-
-    ; Load BG file
-    call load_background 
 
     call init_video_mode
     mov ax, 0000h       
@@ -372,6 +396,29 @@ draw_string ENDP
 start_game:
     call clear_screen
     call init_board
+    
+    mov ax, offset q_empty
+    mov current_quote, ax
+
+    ; Вибираємо фон
+    cmp ai_mode, 1
+    jne skip_bg_load
+    cmp ai_difficulty, 0
+    je load_e
+    cmp ai_difficulty, 1
+    je load_m
+load_h:
+    mov dx, offset bg_f2
+    jmp do_bg_load
+load_e:
+    mov dx, offset bg_f0
+    jmp do_bg_load
+load_m:
+    mov dx, offset bg_f1
+do_bg_load:
+    call load_background
+skip_bg_load:
+
     call init_video_mode
 
     mov game_state, 0
@@ -430,6 +477,8 @@ check_ai_turn:
     je check_input
 
     call ai_turn
+    call play_move_sound
+    call update_ai_quote     ; --- ТУТ МИ ОНОВЛЮЄМО ЦИТАТУ ПІСЛЯ ШІ ---
     call update_game_state
     mov is_selected, 0
     mov need_redraw, 1
@@ -449,6 +498,56 @@ restart_game_tr:
 
 exit_game_tr:
     jmp exit_program
+
+; --- ПРОЦЕДУРА ДЛЯ ВИБОРУ ЦИТАТИ ---
+update_ai_quote PROC
+    push ax
+
+    ; Ставимо базову фразу
+    mov ax, offset q_ai_default
+    mov current_quote, ax
+
+    ; Перевіряємо, чи ШІ щойно когось з'їв
+    cmp last_move_was_capture, 1
+    jne uaq_end
+
+    ; Дивимося, яка це фігура
+    mov al, last_captured_piece
+    and al, TYPE_MASK
+
+    cmp al, QUEEN
+    jne uaq_chk_rook
+    mov ax, offset q_ai_cap_queen
+    mov current_quote, ax
+    jmp uaq_end
+
+uaq_chk_rook:
+    cmp al, ROOK
+    jne uaq_chk_minor
+    mov ax, offset q_ai_cap_rook
+    mov current_quote, ax
+    jmp uaq_end
+
+uaq_chk_minor:
+    cmp al, BISHOP
+    je uaq_is_minor
+    cmp al, KNIGHT
+    jne uaq_chk_pawn
+uaq_is_minor:
+    mov ax, offset q_ai_cap_minor
+    mov current_quote, ax
+    jmp uaq_end
+
+uaq_chk_pawn:
+    cmp al, PAWN
+    jne uaq_end
+    mov ax, offset q_ai_cap_pawn
+    mov current_quote, ax
+
+uaq_end:
+    pop ax
+    ret
+update_ai_quote ENDP
 
 update_game_state PROC
     push ax
@@ -622,43 +721,82 @@ clear_promotion_char:
     ret
 clear_promotion_prompt ENDP
 
-exit_program:
-    mov ax, 0003h
-    int 10h
-    mov ah, 4Ch
-    int 21h
+; --- ЗВУК ХОДУ ---
+play_move_sound PROC
+    push ax
+    push cx
+    push dx
+    
+    in al, 61h
+    or al, 3
+    out 61h, al
 
-; Read BG.BIN
+    mov al, 0B6h
+    out 43h, al
+    mov al, 0E9h   
+    out 42h, al
+    mov al, 04h    
+    out 42h, al
+
+    mov ah, 86h
+    mov cx, 0
+    mov dx, 30000  
+    int 15h
+
+    in al, 61h
+    and al, 0FCh
+    out 61h, al
+
+    pop dx
+    pop cx
+    pop ax
+    ret
+play_move_sound ENDP
+
 load_background PROC
     push ax
     push bx
     push cx
     push dx
+    push di
+    push es
 
-    ; Open file
+    mov ax, ds
+    mov es, ax
+    mov cx, 2000
+    mov di, offset bg_data
+    xor ax, ax
+    cld
+    rep stosw
+
     mov ah, 3Dh
     mov al, 0           
-    mov dx, offset bg_filename
     int 21h
     jc lb_end           
     mov bx, ax          
 
-    ; Read 4000 bytes
     mov ah, 3Fh
     mov cx, 4000
     mov dx, offset bg_data
     int 21h
 
-    ; Close file
     mov ah, 3Eh
     int 21h
 
 lb_end:
+    pop es
+    pop di
     pop dx
     pop cx
     pop bx
     pop ax
     ret
 load_background ENDP
+
+exit_program:
+    mov ax, 0003h
+    int 10h
+    mov ah, 4Ch
+    int 21h
 
 END start

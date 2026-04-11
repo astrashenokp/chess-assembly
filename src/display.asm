@@ -17,7 +17,7 @@ JUMPS
     EXTRN from_row:WORD
     EXTRN from_col:WORD
     EXTRN bg_data:BYTE
-    EXTRN current_quote:WORD ; Получаем цитату из main.asm
+    EXTRN current_quote:WORD
 
     ; Piece chars
     piece_chars DB ' ', 1, 2, 3, 4, 5, 6
@@ -95,10 +95,6 @@ init_video_mode PROC
 init_video_mode ENDP
 
 draw_background PROC
-    cmp byte ptr ai_mode, 1
-    jne db_skip
-    
-    ; Теперь рисует фон всегда, если играем против ШИ
     push ax
     push cx
     push si
@@ -116,7 +112,6 @@ draw_background PROC
     pop si
     pop cx
     pop ax
-db_skip:
     ret
 draw_background ENDP
 
@@ -758,7 +753,6 @@ ds_ctrl:
     mov si, offset str_quit
     call draw_status_string_cyan
 
-    ; --- ВЫВОД ЦИТАТЫ РИНАТЫ ---
     cmp byte ptr ai_mode, 1
     jne check_banner
     mov di, 160 * 13 + 84

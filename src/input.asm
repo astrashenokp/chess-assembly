@@ -20,7 +20,7 @@ INCLUDE shared.inc
     EXTRN clear_promotion_prompt:PROC
     EXTRN update_game_state:PROC
     EXTRN get_legal_moves:PROC
-    EXTRN play_move_sound:PROC ; Импортируем звук
+    EXTRN play_move_sound:PROC 
 
 PUBLIC handle_input
 
@@ -226,7 +226,7 @@ do_move:
     push from_col       
     push from_row       
     call execute_move
-    call play_move_sound   ; Воспроизводим звук при ходе игрока
+    call play_move_sound   
 
     cmp waiting_for_promotion, 0
     je move_done_label

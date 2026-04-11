@@ -54,18 +54,17 @@ INCLUDE shared.inc
     dif_med       DB '2. MEDIUM (Zaychyk Judy Hopps)', 0
     dif_hard      DB '3. HARD   (Pes Patron)', 0
 
-    ; --- ФОНИ ДЛЯ РІЗНИХ ШІ ---
     PUBLIC bg_data
     bg_f0         DB 'bg0.bin', 0
     bg_f1         DB 'bg1.bin', 0
     bg_f2         DB 'bg2.bin', 0
     bg_data       DB 4000 DUP(0)
 
-    ; --- ЗМІННІ З GAME.ASM ДЛЯ ПЕРЕВІРКИ ЗДЗУ ---
+   
     EXTRN last_move_was_capture:BYTE
     EXTRN last_captured_piece:BYTE
 
-    ; --- СИСТЕМА ЦИТАТ ---
+   
     PUBLIC current_quote
     current_quote  DW offset q_empty
     q_empty        DB ' ', 0
@@ -97,6 +96,7 @@ PROMOTION_COL  EQU 5
 PROMOTION_LEN  EQU 24
 
 EXTRN init_video_mode:PROC
+EXTRN draw_background:PROC   
 EXTRN draw_board:PROC
 EXTRN draw_cursor:PROC
 EXTRN init_board:PROC
@@ -400,6 +400,23 @@ start_game:
     mov ax, offset q_empty
     mov current_quote, ax
 
+   
+    push ax
+    push cx
+    push di
+    push es
+    mov ax, ds
+    mov es, ax
+    mov cx, 2000
+    mov di, offset bg_data
+    mov ax, 0020h 
+    cld
+    rep stosw
+    pop es
+    pop di
+    pop cx
+    pop ax
+
     ; Вибираємо фон
     cmp ai_mode, 1
     jne skip_bg_load
@@ -446,6 +463,7 @@ game_loop:
     mov ax, 0002h
     int 33h
 
+    call draw_background  
     call draw_board
     call draw_status      
     
@@ -478,7 +496,7 @@ check_ai_turn:
 
     call ai_turn
     call play_move_sound
-    call update_ai_quote     ; --- ТУТ МИ ОНОВЛЮЄМО ЦИТАТУ ПІСЛЯ ШІ ---
+    call update_ai_quote
     call update_game_state
     mov is_selected, 0
     mov need_redraw, 1
@@ -499,19 +517,15 @@ restart_game_tr:
 exit_game_tr:
     jmp exit_program
 
-; --- ПРОЦЕДУРА ДЛЯ ВИБОРУ ЦИТАТИ ---
 update_ai_quote PROC
     push ax
 
-    ; Ставимо базову фразу
     mov ax, offset q_ai_default
     mov current_quote, ax
 
-    ; Перевіряємо, чи ШІ щойно когось з'їв
     cmp last_move_was_capture, 1
     jne uaq_end
 
-    ; Дивимося, яка це фігура
     mov al, last_captured_piece
     and al, TYPE_MASK
 
@@ -721,7 +735,6 @@ clear_promotion_char:
     ret
 clear_promotion_prompt ENDP
 
-; --- ЗВУК ХОДУ ---
 play_move_sound PROC
     push ax
     push cx
@@ -765,7 +778,7 @@ load_background PROC
     mov es, ax
     mov cx, 2000
     mov di, offset bg_data
-    xor ax, ax
+    mov ax, 0020h
     cld
     rep stosw
 

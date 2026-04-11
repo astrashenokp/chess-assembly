@@ -1,7 +1,7 @@
 from PIL import Image, ImageOps
 
-INPUT_FILE = "original_judy.jpg" 
-OUTPUT_FILE = "bg.bin"
+INPUT_FILE = "image.png" 
+OUTPUT_FILE = "bg1bin"
 
 # Exact DOS palette (16 colors supported by text mode)
 pal = [

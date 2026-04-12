@@ -1,4 +1,5 @@
 *.obj
 *.exe
 *.map
-
+*.bin
+!bg.bg

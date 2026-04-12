@@ -69,7 +69,7 @@ INCLUDE shared.inc
     current_quote  DW offset q_empty
     q_empty        DB ' ', 0
     
-    ; Заглушки цитат, сюди вписуй свої або Рінатині:
+  
     q_ai_cap_queen DB '"Ouch! Say goodbye to your Queen!"', 0
     q_ai_cap_rook  DB '"Nice Rook. I will take it."', 0
     q_ai_cap_minor DB '"Just a minor piece, but thanks!"', 0
@@ -78,7 +78,6 @@ INCLUDE shared.inc
 
 .CODE
 
-; --- КОНСТАНТИ ФІГУР ---
 EMPTY  EQU 0
 PAWN   EQU 1
 KNIGHT EQU 2

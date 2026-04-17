@@ -18,8 +18,8 @@ JUMPS
     EXTRN from_col:WORD
     EXTRN bg_data:BYTE
     EXTRN current_quote:WORD
+    EXTRN w_time_m:BYTE, w_time_s:BYTE, b_time_m:BYTE, b_time_s:BYTE
 
-    ; Piece chars
     piece_chars DB ' ', 1, 2, 3, 4, 5, 6
 
     str_status_title_pvp DB 'Player vs Player  ', 0
@@ -30,6 +30,9 @@ JUMPS
     str_white            DB 'White', 0
     str_black            DB 'Black', 0
     
+    str_w_time           DB 'W Time: ', 0
+    str_b_time           DB 'B Time: ', 0
+
     str_check_p          DB '** CHECK! **', 0
     str_black_king_check DB 'Black king is in check', 0
     str_white_king_check DB 'White king is in check', 0
@@ -65,6 +68,8 @@ JUMPS
 .CODE
 LOCAL_BOARD_LEFT EQU 5 
 LOCAL_BOARD_TOP EQU 2   
+
+EXTRN get_move_capture_info:PROC
 
 PUBLIC init_video_mode, draw_background, draw_board, draw_piece, draw_cursor, highlight_moves, draw_status
 
@@ -421,42 +426,28 @@ hm_loop:
     mov ch, [si+2] 
     mov cl, [si+3] 
 
-    mov al, ch
-    mov ah, 8
-    mul ah
-    add al, cl
-    mov bx, ax
-    xor bh, bh
-    mov dl, board[bx]
-    mov al, dl
-    and al, TYPE_MASK
-    cmp al, 0
-    jne hm_red
-
-    push bx
-    mov al, [si]
-    mov ah, 8
-    mul ah
-    add al, [si+1]
-    mov bx, ax
-    xor bh, bh
-    mov al, board[bx]
-    pop bx
-
-    and al, TYPE_MASK
+    xor ax, ax
+    mov al, cl        
+    push ax
+    xor ax, ax
+    mov al, ch         
+    push ax
+    xor ax, ax
+    mov al, [si+1]   
+    push ax
+    xor ax, ax
+    mov al, [si]    
+    push ax
+    
+    call get_move_capture_info
     cmp al, 1
-    jne hm_green
-
-    mov al, [si+1]
-    cmp al, [si+3]
-    je hm_green
-
-hm_red:
-    mov ah, 40h 
-    jmp hm_apply
+    je hm_red
 
 hm_green:
     mov ah, 20h 
+    jmp hm_apply
+hm_red:
+    mov ah, 40h 
 
 hm_apply:
     push ax
@@ -484,37 +475,30 @@ hm_apply:
     and al, 0Fh
     or al, ah
     mov es:[di+1], al
-    
     mov al, es:[di+3]
     and al, 0Fh
     or al, ah
     mov es:[di+3], al
-    
     mov al, es:[di+5]
     and al, 0Fh
     or al, ah
     mov es:[di+5], al
-    
     mov al, es:[di+7]
     and al, 0Fh
     or al, ah
     mov es:[di+7], al
-    
     mov al, es:[di+161]
     and al, 0Fh
     or al, ah
     mov es:[di+161], al
-    
     mov al, es:[di+163]
     and al, 0Fh
     or al, ah
     mov es:[di+163], al
-    
     mov al, es:[di+165]
     and al, 0Fh
     or al, ah
     mov es:[di+165], al
-    
     mov al, es:[di+167]
     and al, 0Fh
     or al, ah
@@ -633,10 +617,10 @@ ds_go_opts:
     jmp ds_draw_banner
 
 draw_active:
-    mov di, 160 * 4 + 84
+    mov di, 160 * 3 + 84
     mov si, offset str_turn
     call draw_status_string
-    mov di, 160 * 4 + 96
+    mov di, 160 * 3 + 96
     
     cmp byte ptr current_turn, 0
     jne t_black
@@ -648,15 +632,51 @@ dw_w:
     mov si, offset str_white
 dw_t:
     call draw_status_string_white
+    cmp ai_mode, 1
+    je no_timer_draw
+    
+    mov di, 160 * 5 + 84
+    mov si, offset str_w_time
+    call draw_status_string_yellow
+    mov al, w_time_m
+    call print_2digits
+    mov ah, 0Eh
+    mov al, ':'
+    mov es:[di], al
+    mov es:[di+1], ah
+    add di, 2
+    mov al, w_time_s
+    call print_2digits
+
+    mov di, 160 * 6 + 84
+    mov si, offset str_b_time
+    call draw_status_string_yellow
+    mov al, b_time_m
+    call print_2digits
+    mov ah, 0Eh
+    mov al, ':'
+    mov es:[di], al
+    mov es:[di+1], ah
+    add di, 2
+    mov al, b_time_s
+    call print_2digits
+    jmp timer_draw_done
+
+no_timer_draw:
+    mov di, 160 * 5 + 84
+    mov si, current_quote
+    call draw_status_string_yellow
+
+timer_draw_done:
 
     cmp byte ptr check_status, 0
     jne do_chk
     jmp ds_cap
 do_chk:
-    mov di, 160 * 6 + 88
+    mov di, 160 * 8 + 88
     mov si, offset str_check_p
     call draw_status_string_red
-    mov di, 160 * 7 + 88
+    mov di, 160 * 9 + 88
     
     cmp byte ptr check_status, 1
     jne do_chk_b
@@ -678,21 +698,19 @@ ds_cap:
     mov word ptr banner_str, 0
 
 ds_cap_cont:
-    mov di, 160 * 9 + 84
+    mov di, 160 * 11 + 84
     mov si, offset str_captured
     call draw_status_string
-    mov di, 160 * 10 + 88
+    mov di, 160 * 12 + 88
     mov si, offset str_by_white
     call draw_status_string
-    mov di, 160 * 11 + 88
+    mov di, 160 * 13 + 88
     mov si, offset str_by_black
     call draw_status_string
 
-    ; Captured white pieces
-    mov di, 160 * 10 + 108
+    mov di, 160 * 12 + 108
     mov si, offset captured_by_white
     mov cx, cap_w_count
-    
     cmp cx, 0
     jne do_dcw
     jmp ds_cap_b
@@ -703,22 +721,18 @@ dcw_lp:
     xor bx, bx
     mov bl, al
     mov al, piece_chars[bx]
-    
     mov bh, 1Fh       
     mov es:[di+1], bh
     mov es:[di], al
-
     add di, 2
     inc si
     dec cx
     jnz dcw_lp
 
 ds_cap_b:
-    ; Captured black pieces
-    mov di, 160 * 11 + 108
+    mov di, 160 * 13 + 108
     mov si, offset captured_by_black
     mov cx, cap_b_count
-    
     cmp cx, 0
     jne do_dcb
     jmp ds_ctrl
@@ -729,35 +743,27 @@ dcb_lp:
     xor bx, bx
     mov bl, al
     mov al, piece_chars[bx]
-    
     mov bh, 70h       
     mov es:[di+1], bh
     mov es:[di], al
-
     add di, 2
     inc si
     dec cx
     jnz dcb_lp
 
 ds_ctrl:
-    mov di, 160 * 15 + 84
+    mov di, 160 * 16 + 84
     mov si, offset str_controls
     call draw_status_string_yellow
-    mov di, 160 * 16 + 88
+    mov di, 160 * 17 + 88
     mov si, offset str_move_cursor
     call draw_status_string_cyan
-    mov di, 160 * 17 + 88
+    mov di, 160 * 18 + 88
     mov si, offset str_confirm
     call draw_status_string_cyan
-    mov di, 160 * 18 + 88
+    mov di, 160 * 19 + 88
     mov si, offset str_quit
     call draw_status_string_cyan
-
-    cmp byte ptr ai_mode, 1
-    jne check_banner
-    mov di, 160 * 13 + 84
-    mov si, current_quote
-    call draw_status_string_yellow
 
 check_banner:
     cmp word ptr banner_str, 0
@@ -797,6 +803,27 @@ ds_end:
     pop ax
     ret
 draw_status ENDP
+
+print_2digits PROC
+    push ax
+    push bx
+    push cx
+    mov ah, 0
+    mov bl, 10
+    div bl
+    add al, '0'
+    add ah, '0'
+    mov bh, 0Eh
+    mov es:[di], al
+    mov es:[di+1], bh
+    mov es:[di+2], ah
+    mov es:[di+3], bh
+    add di, 4
+    pop cx
+    pop bx
+    pop ax
+    ret
+print_2digits ENDP
 
 draw_ss_loop PROC
 ss_loop_start:

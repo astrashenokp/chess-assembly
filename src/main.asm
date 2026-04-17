@@ -54,27 +54,43 @@ INCLUDE shared.inc
     dif_med       DB '2. MEDIUM (Zaychyk Judy Hopps)', 0
     dif_hard      DB '3. HARD   (Pes Patron)', 0
 
+    tm_title      DB 'CHOOSE TIME LIMIT (1v1):', 0
+    tm_3m         DB '1. 3 Minutes', 0
+    tm_5m         DB '2. 5 Minutes', 0
+    tm_10m        DB '3. 10 Minutes', 0
+
+    PUBLIC w_time_m, w_time_s, b_time_m, b_time_s, time_limit
+    time_limit    DB 5
+    w_time_m      DB 5
+    w_time_s      DB 0
+    b_time_m      DB 5
+    b_time_s      DB 0
+    last_tick     DW 0
+
     PUBLIC bg_data
-    bg_f0         DB 'bg0.bin', 0
-    bg_f1         DB 'bg1.bin', 0
-    bg_f2         DB 'bg2.bin', 0
     bg_data       DB 4000 DUP(0)
 
-   
     EXTRN last_move_was_capture:BYTE
     EXTRN last_captured_piece:BYTE
 
-   
     PUBLIC current_quote
     current_quote  DW offset q_empty
     q_empty        DB ' ', 0
     
-  
     q_ai_cap_queen DB '"Ouch! Say goodbye to your Queen!"', 0
     q_ai_cap_rook  DB '"Nice Rook. I will take it."', 0
     q_ai_cap_minor DB '"Just a minor piece, but thanks!"', 0
     q_ai_cap_pawn  DB '"Yummy pawn! Om-nom-nom!"', 0
+    q_ai_give_chk  DB '"Check! Your King is in danger!"', 0
+    q_ai_rec_chk   DB '"Oh... you dare to attack my King?"', 0
     q_ai_default   DB '"Hmm... Your move, human."', 0
+
+    bg0_arr LABEL BYTE
+    INCLUDE bg0.inc
+    bg1_arr LABEL BYTE
+    INCLUDE bg1.inc
+    bg2_arr LABEL BYTE
+    INCLUDE bg2.inc
 
 .CODE
 
@@ -186,17 +202,64 @@ mm_wait_key:
     int 16h
     cmp al, '1'
     jne mm_check_2
-    jmp start_1v1
-mm_check_2:
+    mov ai_mode, 0
+    jmp menu_time    
     cmp al, '2'
     jne mm_ignore
     jmp menu_color
 mm_ignore:
     jmp mm_wait_key
 
-start_1v1:
-    mov ai_mode, 0
+menu_time:
+    call clear_screen
+    mov ax, 0002h
+    int 33h
+
+    mov si, offset tm_title
+    mov dh, 8
+    mov dl, 28
+    mov bl, 0Fh
+    call draw_string
+
+    mov si, offset tm_3m
+    mov dh, 10
+    mov dl, 32
+    mov bl, 0Ah
+    call draw_string
+
+    mov si, offset tm_5m
+    mov dh, 12
+    mov dl, 32
+    mov bl, 0Eh
+    call draw_string
+
+    mov si, offset tm_10m
+    mov dh, 14
+    mov dl, 32
+    mov bl, 0Bh
+    call draw_string
+
+    mov ax, 0001h
+    int 33h
+
+mt_wait_key:
+    mov ah, 00h
+    int 16h
+    cmp al, '1'
+    jne mt_check_2
+    mov time_limit, 3
     jmp start_game
+mt_check_2:
+    cmp al, '2'
+    jne mt_check_3
+    mov time_limit, 5
+    jmp start_game
+mt_check_3:
+    cmp al, '3'
+    jne mt_wait_key
+    mov time_limit, 10
+    jmp start_game
+
 
 menu_color:
     mov ai_mode, 1
@@ -396,10 +459,21 @@ start_game:
     call clear_screen
     call init_board
     
+    ; Порожня цитата на старті гри!
     mov ax, offset q_empty
     mov current_quote, ax
 
-   
+    ; Ініціалізація таймера
+    mov al, time_limit
+    mov w_time_m, al
+    mov b_time_m, al
+    mov w_time_s, 0
+    mov b_time_s, 0
+    
+    mov ah, 00h
+    int 1ah
+    mov last_tick, dx
+
     push ax
     push cx
     push di
@@ -416,22 +490,8 @@ start_game:
     pop cx
     pop ax
 
-    ; Вибираємо фон
     cmp ai_mode, 1
     jne skip_bg_load
-    cmp ai_difficulty, 0
-    je load_e
-    cmp ai_difficulty, 1
-    je load_m
-load_h:
-    mov dx, offset bg_f2
-    jmp do_bg_load
-load_e:
-    mov dx, offset bg_f0
-    jmp do_bg_load
-load_m:
-    mov dx, offset bg_f1
-do_bg_load:
     call load_background
 skip_bg_load:
 
@@ -456,6 +516,53 @@ flush_kbd:
 flush_done:
 
 game_loop:
+    cmp ai_mode, 0
+    jne gl_timer_done
+    cmp game_state, 0
+    jne gl_timer_done
+
+    mov ah, 00h
+    int 1ah
+    mov ax, dx
+    sub ax, last_tick
+    cmp ax, 18
+    jl gl_timer_done
+
+    mov last_tick, dx
+    mov need_redraw, 1
+
+    cmp current_turn, 0
+    je gl_w_tick
+    ; Black tick
+    cmp b_time_s, 0
+    jne gl_b_sec
+    cmp b_time_m, 0
+    je gl_b_timeout
+    dec b_time_m
+    mov b_time_s, 59
+    jmp gl_timer_done
+gl_b_sec:
+    dec b_time_s
+    jmp gl_timer_done
+gl_b_timeout:
+    mov game_state, 1 ; White wins
+    jmp gl_timer_done
+
+gl_w_tick:
+    cmp w_time_s, 0
+    jne gl_w_sec
+    cmp w_time_m, 0
+    je gl_w_timeout
+    dec w_time_m
+    mov w_time_s, 59
+    jmp gl_timer_done
+gl_w_sec:
+    dec w_time_s
+    jmp gl_timer_done
+gl_w_timeout:
+    mov game_state, 2 ; Black wins
+
+gl_timer_done:
     cmp need_redraw, 1
     jne check_ai_turn     
 
@@ -495,8 +602,8 @@ check_ai_turn:
 
     call ai_turn
     call play_move_sound
-    call update_ai_quote
     call update_game_state
+    call update_ai_quote
     mov is_selected, 0
     mov need_redraw, 1
     jmp game_loop
@@ -519,11 +626,16 @@ exit_game_tr:
 update_ai_quote PROC
     push ax
 
-    mov ax, offset q_ai_default
+    
+    mov ax, offset q_empty
     mov current_quote, ax
 
+    cmp check_status, 1
+    je uaq_rec_chk  
+    cmp check_status, 2
+    je uaq_give_chk 
     cmp last_move_was_capture, 1
-    jne uaq_end
+    jne uaq_def
 
     mov al, last_captured_piece
     and al, TYPE_MASK
@@ -553,8 +665,23 @@ uaq_is_minor:
 
 uaq_chk_pawn:
     cmp al, PAWN
-    jne uaq_end
+    jne uaq_def
     mov ax, offset q_ai_cap_pawn
+    mov current_quote, ax
+    jmp uaq_end
+
+uaq_rec_chk:
+    mov ax, offset q_ai_rec_chk
+    mov current_quote, ax
+    jmp uaq_end
+
+uaq_give_chk:
+    mov ax, offset q_ai_give_chk
+    mov current_quote, ax
+    jmp uaq_end
+
+uaq_def:
+    mov ax, offset q_ai_default
     mov current_quote, ax
 
 uaq_end:
@@ -759,6 +886,27 @@ play_move_sound PROC
     and al, 0FCh
     out 61h, al
 
+    cmp check_status, 0
+    je snd_end
+
+    in al, 61h
+    or al, 3
+    out 61h, al
+    mov al, 0B6h
+    out 43h, al
+    mov al, 090h 
+    out 42h, al
+    mov al, 02h    
+    out 42h, al
+    mov ah, 86h
+    mov cx, 0
+    mov dx, 50000 
+    int 15h
+    in al, 61h
+    and al, 0FCh
+    out 61h, al
+
+snd_end:
     pop dx
     pop cx
     pop ax
@@ -767,9 +915,8 @@ play_move_sound ENDP
 
 load_background PROC
     push ax
-    push bx
     push cx
-    push dx
+    push si
     push di
     push es
 
@@ -777,30 +924,26 @@ load_background PROC
     mov es, ax
     mov cx, 2000
     mov di, offset bg_data
-    mov ax, 0020h
+    
+    cmp ai_difficulty, 0
+    je load_bg0
+    cmp ai_difficulty, 1
+    je load_bg1
+    mov si, offset bg2_arr
+    jmp do_copy
+load_bg0:
+    mov si, offset bg0_arr
+    jmp do_copy
+load_bg1:
+    mov si, offset bg1_arr
+do_copy:
     cld
-    rep stosw
+    rep movsw
 
-    mov ah, 3Dh
-    mov al, 0           
-    int 21h
-    jc lb_end           
-    mov bx, ax          
-
-    mov ah, 3Fh
-    mov cx, 4000
-    mov dx, offset bg_data
-    int 21h
-
-    mov ah, 3Eh
-    int 21h
-
-lb_end:
     pop es
     pop di
-    pop dx
+    pop si
     pop cx
-    pop bx
     pop ax
     ret
 load_background ENDP

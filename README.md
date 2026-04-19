@@ -128,7 +128,7 @@ Extra Segment (ES) / Відеопам'ять: Жорстко прив'язани
 
 У результаті виконання проєкту було створено програму, що реалізує шахову гру мовою Assembly з текстовим інтерфейсом, базовою логікою шахів та комп’ютерним супротивником.
 
-# Структура проєкту
+## Структура проєкту
 
 project-assembly-divers/
 ├── src/
@@ -146,5 +146,7 @@ project-assembly-divers/
 │      
 ├── .gitignore          
 ├── README.md
+├── architecture.md
+├── ASSESSMENT.md
 ├── checkpoints.md
 └── video_presentation.txt

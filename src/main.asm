@@ -204,6 +204,7 @@ mm_wait_key:
     jne mm_check_2
     mov ai_mode, 0
     jmp menu_time    
+mm_check_2:         
     cmp al, '2'
     jne mm_ignore
     jmp menu_color

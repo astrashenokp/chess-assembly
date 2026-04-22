@@ -20,10 +20,10 @@
 ## ❌ Звіт: Перевірка на ШІ
 
 - Модель: Multi Language
-- AI: 100.0% / Original: 0.0%
-- [Звіт Originality.ai](https://app.originality.ai/share/z5lmf1ey4o3vbqxp)
+- AI: 98.5% / Original: 1.5%
+- [Звіт Originality.ai](https://app.originality.ai/share/w7q8xnu2o96v1dcr)
 
-_Попередня перевірка (2026-04-20): AI 100.0%, [Originality.ai](https://app.originality.ai/share/nfdviy46roeuw381)._
+_Попередня перевірка (2026-04-21): AI 100.0%, [Originality.ai](https://app.originality.ai/share/z5lmf1ey4o3vbqxp)._
 
 ---
 

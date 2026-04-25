@@ -3,8 +3,8 @@ Chess
 
 ## Team
 
-- Abdurakhimova Rinata — [Linkedin](www.linkedin.com/in/rinata-abdurakhimova-0316063b2/a)
-- Astrashenok Polina — [Linkedin](www.linkedin.com/in/polina-astrashenok)
+- Abdurakhimova Rinata — [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/rinata-abdurakhimova-0316063b2/a)
+- Astrashenok Polina — [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/polina-astrashenok/)
 
 ## Project Objective
 

@@ -1,147 +1,147 @@
-# Назва проєкту
-Шахи (Chess)
+# Project Name
+Chess
 
-Тема: [R07](https://github.com/ukma-fin-csa-2026/projects/issues/38)
+Topic: [R07](https://github.com/ukma-fin-csa-2026/projects/issues/38)
 
-## Команда
+## Team
 
-- Абдурахімова Ріната — r.abdurakhimova@ukma.edu.ua
-- Астрашенок Поліна — p.astrashenok@ukma.edu.ua
+- Abdurakhimova Rinata — r.abdurakhimova@ukma.edu.ua
+- Astrashenok Polina — p.astrashenok@ukma.edu.ua
 
-## Мета проєкту
+## Project Objective
 
-Метою цього проєкту є створення шахової гри мовою на Assembly для середовища DOS. Проєкт включає в себе відображення шахової дошки у текстовому режимі відеопам'яті, можливість користувача виконувати ходи та перевіряти їх коректність, а також реалізацію гри проти штучного інтелекту. 
+The objective of this project is to create a chess game in Assembly language for the DOS environment. The project includes displaying the chessboard in the text mode of video memory, allowing the user to make moves and verifying their correctness, as well as implementing gameplay against an artificial intelligence. 
 
-## План реалізації проєкту
+## Implementation Plan
 
-Робота над проєктом поділяється між Рінатою та Поліною на дві основні частини:
+The work on the project is divided between Rinata and Polina into two main parts:
 
-- **Студент A(Поліна)** — відображення та інтерфейс користувача
-- **Студент B(Ріната)** — ігрова логіка та штучний інтелект
+- **Student A (Polina)** — rendering and user interface
+- **Student B (Rinata)** — game logic and artificial intelligence
 
-Для уникнення несумісностей між частинами проєкту на початку визначаються спільні структури даних, формат представлення дошки та інтерфейси виклику процедур(файл architecture.md).
+To avoid incompatibilities between parts of the project, shared data structures, the board representation format, and procedure calling interfaces are defined at the beginning (`architecture.md` file).
 
+### Student A - Polina (rendering and interface)
 
-### Студент A - Поліна (відображення та інтерфейс)
+- Implementation of basic procedures for working with B800h video memory and setting up the video mode (B800h video memory)
+- Creation of the start menu: mode selection and handling interactive selection zones (draw_status, handle_input)
+- Chessboard rendering: displaying cells of different colors and outputting coordinates (draw_board)
+- Drawing (rendering) pieces using pseudo-graphics instead of standard letters (draw_piece)
+- Building the game interface: status panel with an avatar, name, turn indicator, and a list of captured pieces (draw_status)
+- Navigating the board using arrow keys and the ability to click/press to select (draw_cursor, handle_input)
+- Color highlighting of possible moves: green - free square, red - capture (highlight_moves)
+- Move confirmation logic and creation of a piece selection menu for pawn promotion (handle_input, draw_status)
+- Dynamic UI changes during Check: shifting the captured pieces block, "CHECK" text, and playing a sound (draw_status)
+- Implementation of the final victory screen: repainting the board, audio, displaying a quote, and a "Quit" button (draw_status, handle_input)
+- Main files: display.asm, input.asm
 
-- Реалізація базових процедур роботи з відеопам’яттю B800h та налаштування відеорежиму (B800h video memory)
-- Створення стартового меню: вибір режиму та обробка інтерактивних зон вибору (draw_status, handle_input)
-- Рендеринг шахової дошки: відображення клітинок різного кольору та вивід координат (draw_board)
-- Відмальовка (пробітування) фігур за допомогою псевдографіки замість звичайних літер (draw_piece)
-- Побудова ігрового інтерфейсу: панель стану з аватаром, ім'ям, індикатором ходу та списком збитих фігур (draw_status)
-- Навігація по дошці стрілочками та можливість клікати/натискати для вибору (draw_cursor, handle_input)
-- Кольорове підсвічування можливих ходів: зелений - вільна клітина, червоний - взяття (highlight_moves)
-- Логіка підтвердження ходу та створення меню вибору фігури для перетворення пішака (handle_input, draw_status)
-- Динамічна зміна UI під час Шаху: зміщення блоку збитих фігур, напис "ШАХ" та відтворення звуку (draw_status)
-- Реалізація фінального екрана перемоги: перефарбовування дошки, аудіо, вивід цитати та кнопки "Quit" (draw_status, handle_input)
-- Основні файли: display.asm, input.asm
+### Student B - Rinata (game logic)
 
-### Студент B - Ріната (логіка гри)
+- Designing the data structure to represent the board (implementation of the `board[64]` array)
+- Initialization of the starting position (piece placement)
+- Definition of bitwise piece encoding (bit 3 = color, bits 0-2 = type)
+- Implementation of movement rules for each piece type (`get_legal_moves` procedure, generating possible moves)
+- Board boundary checking (index control, preventing out-of-bounds array access)
+- Clear path checking for sliding pieces (bishop, rook, queen)
+- Implementation of move execution (`execute_move` procedure, updating `board`)
+- Checking attacked squares (`is_square_attacked` procedure)
+- Implementation of check detection (`is_in_check` procedure)
+- Preventing moves that leave the king in check (move filtering)
+- Checkmate detection (absence of legal moves during check)
+- Stalemate detection (absence of legal moves without check)
+- Pawn promotion logic (reaching the last rank, choosing a new piece)
+- Implementation of basic artificial intelligence (`ai_turn` procedure, generating all moves)
+- Move selection for AI (priority on capturing pieces, random selection)
+- Turn queue management (changing sides after a move)
+- Main files: game.asm, ai.asm.
 
-- Проєктування структури даних для представлення дошки (реалізація масиву `board[64]`)
-- Ініціалізація стартової позиції (розстановка фігур)
-- Визначення бітового кодування фігур(біт 3 = колір, біти 0-2 = тип)
-- Реалізація правил руху кожного типу фігури (процедура `get_legal_moves`, генерація можливих ходів)
-- Перевірка меж дошки (контроль індексів, запобігання виходу за межі масиву)
-- Перевірка чистоти шляху для ковзних фігур (слон, тура, ферзь)
-- Реалізація виконання ходу (процедура `execute_move`, оновлення `board`)
-- Перевірка атакованих клітинок (процедура `is_square_attacked`)
-- Реалізація перевірки шаху (процедура `is_in_check`)
-- Заборона ходів, що залишають короля під шахом (фільтрація ходів)
-- Виявлення мату (відсутність легальних ходів при шаху)
-- Виявлення пату (відсутність легальних ходів без шаху)
-- Логіка перетворення пішака (досягнення останнього ряду, вибір нової фігури)
-- Реалізація базового штучного інтелекту (процедура `ai_turn`, генерація всіх ходів)
-- Вибір ходу для ШІ (пріоритет захоплення фігур, випадковий вибір)
-- Підтримка черги ходів (зміна сторони після ходу)
-- Основні файли: game.asm, ai.asm.
+### Shared (Architecture and Synchronization)
 
-### Спільне (Архітектура та Синхронізація)
+- main.asm file with initialization and the main game loop.
+- shared.inc file with shared constants (in particular TYPE_MASK, COLOR_MASK).
+- Shared data segment: 64-byte board array (board), counters, turn queue variable (current_turn), king positions (white_king_pos, black_king_pos), and move buffer (move_list for 256 bytes).
+- Coordinated board representation: indexing by the formula index = row * 8 + col (white pieces are placed at the bottom, black pieces at the top).
+- Single move saving format (4 bytes): from_row, from_col, to_row, to_col.
+- Coordinated square encoding (1 byte): 0 = empty, bit 3 - color (0=white, 1=black), bits 0-2 - piece type (1=pawn, 2=knight, 3=bishop, 4=rook, 5=queen, 6=king).
+- Architectural contract (API): parameters are passed to procedures via the stack, results are returned via AX or global buffers; UI never changes the board directly, logic never renders.
 
-- Файл main.asm з ініціалізацією та головним ігровим циклом.
-- Файл shared.inc зі спільними константами (зокрема TYPE_MASK, COLOR_MASK).
-- Спільний сегмент даних: масив дошки на 64 байти (board), лічильники, змінна черги ходу (current_turn), позиції королів (white_king_pos, black_king_pos) та буфер ходів (move_list на 256 байт).
-- Узгоджене представлення дошки: індексація за формулою index = row * 8 + col (білі фігури розміщуються внизу, чорні – вгорі).
-- Формат збереження одного ходу (4 байти): from_row, from_col, to_row, to_col.
-- Узгоджене кодування клітинок (1 байт): 0 = порожня, біт 3 - колір (0=біла, 1=чорна), біти 0-2 - тип фігури (1=пішак, 2=кінь, 3=слон, 4=тура, 5=ферзь, 6=король).
-- Архітектурний контракт (API): параметри процедурам передаються через стек, результати повертаються через AX або глобальні буфери; UI ніколи не змінює board напряму, логіка ніколи не малює.
+## Final Report 
 
-## Фінальний звіт 
+### Student A's Contribution - Polina: architecture, interface, infrastructure, and UX
 
-### Внесок студента A - Поліни: архітектура, інтерфейс, інфраструктура та UX
+Polina's work in the project consisted of creating a graphical text interface, handling input for the main game loop, and providing the overall project infrastructure, including visuals and audio playback.
 
-Робота Поліни у проєкті полягала у створенні графічного текстового інтерфейсу, обробки вводу головного ігрового циклу та забезпеченні загальної інфраструктури проєкту, включаючи візуал та звукові відтворення.
+It was decided to write the graphics output directly to video memory (0B800h), rather than using BIOS interrupts for every character. Thanks to this, the screen updates instantly - without flickering when redrawing the board or moving the cursor. All pieces were meticulously drawn using custom 8-bit fonts (sprites.inc) loaded into VGA memory, giving the game a retro style.
 
-Вивід графіки було вирішено писати напряму у відеопам'ять (0B800h), а не через BIOS-переривання на кожен символ. Завдяки цьому екран оновлюється миттєво - без мерехтіння при перемальовуванні поля чи русі курсора. Усі фігури були детально намальовані кастомними 8-бітними шрифтами (sprites.inc), які завантажуються в пам'ять VGA, що гра набула ретро стилю.
+For the backgrounds, a Python script (make_bg.py) was written, which converts images to the DOS 16-color palette using weighted RGB distance and generates .inc files with byte arrays. They are immediately included during TASM assembly. No delays on startup, smaller size.
 
-Для фонів було написано Python-скрипт (make_bg.py), який конвертує картинки під 16-колірну палітру DOS через зважену відстань RGB і генерує .inc файли з байтовими масивами. Вони одразу підключаються при збірці в TASM. Ніяких затримок при старті, розмір менший.
+Regarding user experience (UX) and atmosphere:
+- Input (input.asm) - supports both keyboard (int 16h) and mouse (int 33h). This ensures convenience in the DOS environment.
+- Timer for 1v1 - implemented via the BIOS system timer (int 1Ah); before the game, you can choose 3, 5, or 10 minutes.
+- AI Quotes - the computer reacts to events: comments on a check, says something when you take a queen or a rook. Playing against the AI has become much more fun.
+- Sound - written directly to the PC speaker ports. There is a move sound and a separate signal for check.
 
-Щодо взаємодії з користувачем (UX) та атмосфери:
-- Ввід (input.asm) - підтримує і клавіатуру (int 16h), і мишу (int 33h). Це забезпечую зручність у середовищі DOS.
-- Таймер для 1v1 - впроваджено через системний таймер BIOS (int 1Ah), перед грою можна вибрати 3, 5 або 10 хвилин.
-- Цитати ШІ - комп'ютер реагує на події: коментує шах, щось каже коли береш ферзя чи туру. Тепер грати проти ші стало веселіше.
-- Звук - написаний напряму в порти системного динаміка. Є звук ходу і окремий сигнал на шах.
-
-Що можна було б додати ще?
-- Перевести гру у графічний VGA-режим 13h (320x200 пікселів, 256 кольорів). Ми могли б тоді відмовитися від псевдографіки (sprites.inc) на користь повноцінних піксель-арт спрайтів та зробити інтерфейс сучаснішим.
-- Додати різні звукові доріжки при перемозі ші агентів. 
-- Панель історії ходів, тобто зробити збоку вікно, яке записувало б всі ходи в реальному часі. Для цього треба було б тільки написати алгоритм конвертації координат дошки у текст.
-- Можливість скасувати хід. Для цього треба виділити сегмент пам'яті, куди після кожного ходу буде повністю копіюватися масив board. Натисканням Ctrl+Z працювала б така функція.
-
-
-### Внесок студента B - Рінати: ігрова логіка та ШІ
-
-Робота Рінати у проєкті полягала у ігровій логіці та штучному інтелекті - частині, яка визначає коректність ходів, обирає хід комп’ютера та виявляє мат або пат.
-
-Для ковзних фігур я вирішила взяти **підхід A**, і в мене вийшов один спільний цикл для генерації ходів. В результаті я могла використовувати одну процедуру `generate_sliding_moves` для слона, тури й королеви. І це виявилось дуже зручно, бо цей цикл універсальний: коли мені треба було викликати процедуру для тури чи слона, я просто передавала параметром через стек відповідну таблицю руху фігури (rook_dirs або bishop_dirs), а для королеви достатньо було викликати процедуру двічі для обох таблиць, тому що королева - це поєднання ходів тури та слона, отже якась окрема таблиця напрямку для неї не потрібна. На мою думку, це рішення ефективніше і потребує менше інструкцій, ніж підхід Б.
-
-Для перевірки шаху та атакованих клітинок я також вирішила обрати **підхід A**: перевірку, чи певна клітинка атакована. Я реалізувала процедуру `is_square_attacked` так, щоб можна було рухатись від обраної клітинки по всіх таблицях напрямків(для пішака дивимось, чи атакує він клітинку по діагоналі), і перевіряти, чи якась ворожа фігура атакує цю клітинку. Для підходу Б(перевірки, чи фігура зв'язна) мені б треба було робити попередні обчислення, тому перший варіант мені здався простішим у виконанні.
-
-Перед тим як реалізовувати мій файл з аішкою, я подумала, що грати лише проти базового рівня штучного інтелекту було б не дуже цікаво, тому вирішила зробити три рівні складності, і таким чином вийшло поєднати не один, а прям три підходи в `ai.asm`:
-
-- `easy` -  ШІ обирає рандомне взяття, а якщо його немає, робить випадковий легальний хід.
-- `medium` -  ШІ вміє робити матеріальну оцінку позиції і на основі цього робить найкращий хід.
-- `hard` -  ШІ не тільки робить матеріальну оцінку, а ще й вміє грати обережніше та розумніше: в загальній оцінці ходу додається бонус, якщо ШІ може поставити шах чи захистити свою атаковану фігуру; і навпаки отримує штрафи, якщо підставляє свою фігуру під удар.
-
-Завдяки цьому у мене вийшло створити не тільки базовий рівень, а дійсно гідного суперника для нашого майбутного користувача.
-
-Я реалізувала всі рекомендовані розширення для ігрової логіки та ШІ:
-- en passant: взяття на проході для пішака після ходу суперника пішаком на дві клітинки вперед з відстеженням доступності цього ходу у `en_passant_available`.
-- castling: реалізовано коротку і довгу рокіровку з перевіркою, що король і відповідна тура ще не рухались, між ними немає ніяких фігур, король не під шахом і не проходитиме через атаковані клітинки.
-- Три рівні ШІ(легкий, середній, складний)
-
-Що я б справді хотіла вдосконалити потім:
-- зробити ШІ ще розумнішим: додати логіку аналізу не тільки свого ходу, а і наступного ходу суперника; 
-- додати спеціальну логіку дебютів та ендшпілів;
-- реалізувати підказки легального ходу для гравця;
-- додати логіку перевірки повторення позиції три рази з автоматичним оголошенням нічиєї;
-- реалізувати відміну ходу (undo) і повтор ходу (redo)
-
-### Інтеграція нашої роботи
-Найбільшим викликом, мабуть, було поєднати окремі частинки роботи, які ми створювали протягом тижня. Зазвичай наша послідовність дій була така: Ріната працювала над ігровою логікою, перед інтеграцією тестувала процедури у test.asm, щоб одразу побачити, чи будуть якісь помилки; Поліна додавала та вдосконалювала наш візуал, щоб користувачеві було комфортно та цікаво грати; а потім ми об'єднували це все у main.asm. Це був реально цінний досвід, я впевнена що він допоможе нам в майбутніх проєктах!
-
-# Результат
-
-У результаті виконання проєкту було створено програму, що реалізує шахову гру мовою Assembly з текстовим інтерфейсом, базовою логікою шахів та комп’ютерним супротивником.
-
-# Схема організації пам'яті
-Ми обрали модель пам'яті .MODEL small, тому програма розбита на сегменти по 64 КБ. Схема виглядає так:
-
-![Схема організації пам'яті проєкту](memory_diagrama.png)
-
-- CS (сам код): тут знаходяться усі скомпільовані модулі - main.obj, display.obj, game.obj, input.obj, ai.obj.
-- DS (дані): глобальні змінні і стан гри. Основне:
-    - board DB 64 DUP(?) - дошка 8x8 одновимірний масив, клітинка - row * 8 + col
-    - move_list DB 512 DUP(?) - всі легальні ходи, по 4 байти на хід (from_row, from_col, to_row, to_col)
-    - ai_move_buffer DB 1024 DUP(?) - окремий буфер під прорахунки ШІ
-    - таблиці напрямків (rook_dirs, bishop_dirs, knight_offsets, king_dirs)
-    - bg_data DB 4000 DUP(0) - буфер під фонове зображення (символи + кольорові атрибути)
-- SS (стек): виділено 4096 байт - для адрес повернення і локальних параметрів. Координати фігур передаю через bp у модулі логіки.
-- ES (відеопам'ять): жорстко прибита до 0B800h. Написано напряму - без переривань, екран оновлюється миттєво.
+What else could be added?
+- Move the game to graphical VGA mode 13h (320x200 pixels, 256 colors). We could then abandon pseudo-graphics (sprites.inc) in favor of proper pixel-art sprites and make the interface more modern.
+- Add different audio tracks upon AI agent victory. 
+- Move history panel, i.e., create a side window that would record all moves in real time. This would only require writing an algorithm to convert board coordinates to text.
+- Ability to undo a move. This would require allocating a memory segment where the entire board array would be fully copied after each move. Pressing Ctrl+Z would trigger such a function.
 
 
-## Структура проєкту
+### Student B's Contribution - Rinata: game logic and AI
 
+Rinata's work in the project consisted of the game logic and artificial intelligence - the part that determines the correctness of moves, chooses the computer's move, and detects checkmate or stalemate.
+
+For sliding pieces, I decided to use **Approach A**, resulting in a single shared loop for move generation. As a result, I could use one procedure `generate_sliding_moves` for the bishop, rook, and queen. And this turned out to be very convenient, because this loop is universal: when I needed to call the procedure for a rook or a bishop, I simply passed the corresponding piece movement table (rook_dirs or bishop_dirs) as a parameter via the stack, and for the queen, it was enough to call the procedure twice for both tables, because the queen is a combination of rook and bishop moves, so she doesn't need a separate direction table. In my opinion, this solution is more efficient and requires fewer instructions than Approach B.
+
+For checking checks and attacked squares, I also decided to choose **Approach A**: checking if a specific square is attacked. I implemented the `is_square_attacked` procedure so that it could move from the selected square along all direction tables (for a pawn, we check if it attacks the square diagonally), and check if any enemy piece is attacking this square. For Approach B (checking if a piece is pinned), I would have needed to do preliminary calculations, so the first option seemed simpler to execute.
+
+Before implementing my AI file, I thought that playing only against a basic level of artificial intelligence would not be very interesting, so I decided to make three difficulty levels, and thus managed to combine not one, but exactly three approaches in `ai.asm`:
+
+- `easy` - AI chooses a random capture, and if there is none, makes a random legal move.
+- `medium` - AI can make a material evaluation of the position and based on this makes the best move.
+- `hard` - AI not only makes a material evaluation, but also knows how to play more carefully and smartly: a bonus is added to the overall move evaluation if the AI can deliver a check or defend its attacked piece; and conversely, receives penalties if it exposes its piece to an attack.
+
+Thanks to this, I managed to create not only a basic level, but a truly worthy opponent for our future user.
+
+I implemented all the recommended extensions for game logic and AI:
+- en passant: capturing a pawn in passing after the opponent moves a pawn two squares forward, with tracking of the availability of this move in `en_passant_available`.
+- castling: implemented short and long castling, checking that the king and the corresponding rook have not moved yet, there are no pieces between them, the king is not in check, and will not pass through attacked squares.
+- Three AI levels (easy, medium, hard).
+
+What I would really like to improve later:
+- make the AI even smarter: add logic to analyze not only its move, but also the opponent's next move; 
+- add special logic for openings and endgames;
+- implement legal move hints for the player;
+- add logic to check for threefold repetition of a position with an automatic declaration of a draw;
+- implement move undo and redo.
+
+### Integration of our work
+The biggest challenge was probably combining the individual pieces of work we created over the week. Usually, our sequence of actions was as follows: Rinata worked on the game logic, tested the procedures in test.asm before integration to immediately see if there would be any errors; Polina added and improved our visuals so that the user would feel comfortable and interested in playing; and then we combined all this in main.asm. This was a truly valuable experience, and I'm sure it will help us in future projects!
+
+# Result
+
+As a result of the project, a program was created that implements a chess game in Assembly language with a text interface, basic chess logic, and a computer opponent.
+
+# Memory Organization Scheme
+We chose the .MODEL small memory model, so the program is divided into 64 KB segments. The scheme looks like this:
+
+![Project Memory Organization Scheme](memory_diagrama.png)
+
+- CS (code itself): here are all the compiled modules - main.obj, display.obj, game.obj, input.obj, ai.obj.
+- DS (data): global variables and game state. Main ones:
+    - board DB 64 DUP(?) - 8x8 chessboard 1D array, square - row * 8 + col
+    - move_list DB 512 DUP(?) - all legal moves, 4 bytes per move (from_row, from_col, to_row, to_col)
+    - ai_move_buffer DB 1024 DUP(?) - a separate buffer for AI calculations
+    - direction tables (rook_dirs, bishop_dirs, knight_offsets, king_dirs)
+    - bg_data DB 4000 DUP(0) - buffer for the background image (characters + color attributes)
+- SS (stack): 4096 bytes allocated - for return addresses and local parameters. Piece coordinates are passed via bp in the logic module.
+- ES (video memory): hardcoded to 0B800h. Written directly - without interrupts, the screen updates instantly.
+
+
+## Project Structure
+
+```text
 project-assembly-divers/
 ├── src/
 │   ├── main.asm         
@@ -155,7 +155,7 @@ project-assembly-divers/
 │   ├── bg1.inc          
 │   ├── bg2.inc          
 │   └── make_bg.py       
-│      
+│        
 ├── .gitignore          
 ├── README.md
 ├── architecture.md
@@ -163,59 +163,59 @@ project-assembly-divers/
 ├── checkpoints.md
 ├── memory_diagrama.png
 └── video_presentation.txt
+```
 
+## Launch Instructions
 
-## Інструкція запуску
-
-### 1. Підготуйте DOSBox
+### 1. Prepare DOSBox
 
 - Windows:
 
-1. Переконайтеся, що у вас завантажений DosBox.
+1. Make sure you have DOSBox installed.
 
-### 2. Прив'яжіть репозиторій у DOSBox
+### 2. Mount the repository in DOSBox
 
-1. Відкрийте файл `C:\DosBox\dosbox-csa.conf`.
-2. Знайдіть рядок:
+1. Open the file `C:\DosBox\dosbox-csa.conf`.
+2. Find the line:
 
 ```ini
 mount d "C:\Users\YOUR_USERNAME\YOUR_REPO_FOLDER"
 ```
 
-3. Замініть його на шлях до цього репозиторію:
+3. Replace it with the path to this repository:
 
 ```ini
 mount d "C:\YOUR_FOLDER\REPO_FOLDER"
 ```
 
-4. Збережіть файл.
+4. Save the file.
 
 - macOS:
 
-1. Переконайтеся, що у вас завантажений DosBox.
+1. Make sure you have DOSBox installed.
 
-### 2. Прив'яжіть репозиторій у DOSBox
+### 2. Mount the repository in DOSBox
 
-1. Відкрийте файл `~/DosBox/dosbox-csa.conf`.
-2. Знайдіть рядок:
+1. Open the file `~/DosBox/dosbox-csa.conf`.
+2. Find the line:
 
 ```ini
 mount d "~/YOUR_REPO_FOLDER"
 ```
 
-3. Замініть його на шлях до цього репозиторію:
+3. Replace it with the path to this repository:
 
 ```ini
 mount d "~/REPO_FOLDER"
 ```
 
-4. Збережіть файл.
+4. Save the file.
 
-> У шляху до репозиторію не повинно бути кирилиці, інакше DOSBox/TASM можуть не працювати коректно.
+> The path to the repository must not contain Cyrillic characters, otherwise DOSBox/TASM may not work correctly.
 
-### 3. Запустіть DOSBox
+### 3. Run DOSBox
 
-Запустіть:
+Run:
 
 - Windows:
 
@@ -229,7 +229,7 @@ C:\DosBox\START-DOSBOX.bat
 zsh ~/DosBox/start-dosbox.sh
 ```
 
-Після запуску перейдіть у папку з вихідним кодом:
+After launching, navigate to the source code folder:
 
 ```dos
 d:
@@ -237,9 +237,9 @@ cd src
 dir
 ```
 
-### 4. Зберіть і запустіть гру
+### 4. Build and run the game
 
-У `src` виконайте:
+In `src` execute:
 
 ```dos
 tasm /zi main.asm

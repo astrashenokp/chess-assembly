@@ -1,12 +1,10 @@
 # Project Name
 Chess
 
-Topic: [R07](https://github.com/ukma-fin-csa-2026/projects/issues/38)
-
 ## Team
 
-- Abdurakhimova Rinata — r.abdurakhimova@ukma.edu.ua
-- Astrashenok Polina — p.astrashenok@ukma.edu.ua
+- Abdurakhimova Rinata — ![Linkedin](www.linkedin.com/in/rinata-abdurakhimova-0316063b2/a)
+- Astrashenok Polina — ![Linkedin](www.linkedin.com/in/polina-astrashenok)
 
 ## Project Objective
 
